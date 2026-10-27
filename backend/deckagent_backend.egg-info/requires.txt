@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+pydantic>=2
+pydantic-settings
+sqlmodel
+python-pptx
+pymupdf
+python-multipart
+httpx
+google-genai
+anthropic
+
+[dev]
+pytest
+pytest-asyncio

@@ -1,0 +1,18 @@
+Metadata-Version: 2.4
+Name: deckagent-backend
+Version: 0.1.0
+Requires-Python: >=3.11
+Requires-Dist: fastapi
+Requires-Dist: uvicorn[standard]
+Requires-Dist: pydantic>=2
+Requires-Dist: pydantic-settings
+Requires-Dist: sqlmodel
+Requires-Dist: python-pptx
+Requires-Dist: pymupdf
+Requires-Dist: python-multipart
+Requires-Dist: httpx
+Requires-Dist: google-genai
+Requires-Dist: anthropic
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: pytest-asyncio; extra == "dev"
