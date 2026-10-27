@@ -56,6 +56,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Project */
+        post: operations["create_project_api_projects_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{id}/inputs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Inputs */
+        put: operations["update_inputs_api_projects__id__inputs_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{id}/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate Deck */
+        post: operations["generate_deck_api_projects__id__generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/{job_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Job Events */
+        get: operations["get_job_events_api_jobs__job_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{id}/deck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Latest Deck */
+        get: operations["get_latest_deck_api_projects__id__deck_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -66,6 +151,71 @@ export interface components {
             file: string;
             /** Name */
             name?: string | null;
+        };
+        /** ComponentGraph */
+        ComponentGraph: {
+            /** Nodes */
+            nodes: components["schemas"]["Node"][];
+            /** Edges */
+            edges?: components["schemas"]["Edge"][];
+        };
+        /** CreateProjectRequest */
+        CreateProjectRequest: {
+            /** Name */
+            name: string;
+            /** Repo Url */
+            repo_url?: string | null;
+            /** Repo Path */
+            repo_path?: string | null;
+            /** Template Id */
+            template_id: string;
+        };
+        /** Deck */
+        Deck: {
+            /**
+             * Schema Version
+             * @default 1
+             */
+            schema_version: number;
+            /** Project Id */
+            project_id: string;
+            /** Version */
+            version: number;
+            /** Template Id */
+            template_id: string;
+            /** Slides */
+            slides: components["schemas"]["Slide"][];
+            diagram?: components["schemas"]["ComponentGraph"] | null;
+        };
+        /** DeckResponse */
+        DeckResponse: {
+            /** Version */
+            version: number;
+            /**
+             * Created By
+             * @enum {string}
+             */
+            created_by: "generate" | "edit" | "undo" | "manual";
+            /** Summary */
+            summary: string;
+            deck: components["schemas"]["Deck"];
+        };
+        /** Edge */
+        Edge: {
+            /** From */
+            from: string;
+            /** To */
+            to: string;
+            /** Label */
+            label?: string | null;
+        };
+        /** Field */
+        Field: {
+            /** Text */
+            text: string;
+            source: components["schemas"]["Source"];
+            /** Evidence */
+            evidence?: string | null;
         };
         /** FitLimits */
         FitLimits: {
@@ -110,6 +260,40 @@ export interface components {
             /** Llm Provider */
             llm_provider: string;
         };
+        /** InputsOut */
+        InputsOut: {
+            /** Pitch Notes */
+            pitch_notes: string;
+            /** Has Chat */
+            has_chat: boolean;
+            /** Redactions */
+            redactions: number;
+            /** Criteria */
+            criteria: string;
+        };
+        /** InputsRequest */
+        InputsRequest: {
+            /**
+             * Pitch Notes
+             * @default
+             */
+            pitch_notes: string;
+            /**
+             * Chat Text
+             * @default
+             */
+            chat_text: string;
+            /**
+             * Criteria
+             * @default
+             */
+            criteria: string;
+        };
+        /** JobAccepted */
+        JobAccepted: {
+            /** Job Id */
+            job_id: string;
+        };
         /** LayoutInfo */
         LayoutInfo: {
             /** Index */
@@ -126,6 +310,21 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /** Node */
+        Node: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            kind: components["schemas"]["NodeKind"];
+            /** Group */
+            group?: string | null;
+        };
+        /**
+         * NodeKind
+         * @enum {string}
+         */
+        NodeKind: "frontend" | "backend" | "db" | "ai" | "external" | "infra";
         /** PlaceholderInfo */
         PlaceholderInfo: {
             /** Idx */
@@ -145,6 +344,41 @@ export interface components {
             /** Char Limit */
             char_limit: number;
         };
+        /** ProjectOut */
+        ProjectOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Repo Ref */
+            repo_ref: string;
+            /** Template Id */
+            template_id: string;
+            /** Created At */
+            created_at: string;
+        };
+        /** Slide */
+        Slide: {
+            /** Id */
+            id?: string;
+            type: components["schemas"]["SlideType"];
+            title: components["schemas"]["Field"];
+            subtitle?: components["schemas"]["Field"] | null;
+            /** Bullets */
+            bullets?: components["schemas"]["Field"][];
+            /** Image Ref */
+            image_ref?: string | null;
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+        };
+        /**
+         * SlideType
+         * @enum {string}
+         */
+        SlideType: "title" | "problem" | "solution" | "features" | "architecture" | "tech_stack" | "demo" | "impact" | "roadmap" | "closing";
         /** SlotMap */
         SlotMap: {
             /** Title Idx */
@@ -156,6 +390,11 @@ export interface components {
             /** Picture Idx */
             picture_idx?: number | null;
         };
+        /**
+         * Source
+         * @enum {string}
+         */
+        Source: "repo" | "voice" | "chat" | "user" | "needs_input";
         /** TemplateManifest */
         TemplateManifest: {
             /** Template Id */
@@ -312,6 +551,167 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TemplateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_project_api_projects_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProjectRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_inputs_api_projects__id__inputs_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InputsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_deck_api_projects__id__generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_job_events_api_jobs__job_id__events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_latest_deck_api_projects__id__deck_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeckResponse"];
                 };
             };
             /** @description Validation Error */
