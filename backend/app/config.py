@@ -1,11 +1,35 @@
 from functools import lru_cache
+import os
 from pathlib import Path
+import shutil
 from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _ensure_tool_paths() -> None:
+    if shutil.which("dot") is not None:
+        return
+    candidates = [
+        Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Graphviz" / "Graphviz-15.1.1-win64" / "bin",
+        Path("C:/Program Files/Graphviz/bin"),
+        Path("C:/Program Files (x86)/Graphviz/bin"),
+    ]
+    local_app_data = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Graphviz"
+    if local_app_data.exists():
+        for d in local_app_data.glob("*/bin"):
+            candidates.append(d)
+
+    for c in candidates:
+        if (c / "dot.exe").exists() or (c / "dot").exists():
+            os.environ["PATH"] = str(c) + os.pathsep + os.environ.get("PATH", "")
+            break
+
+
+_ensure_tool_paths()
 
 
 class Settings(BaseSettings):

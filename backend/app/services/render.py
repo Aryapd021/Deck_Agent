@@ -35,6 +35,16 @@ def render_deck(
     diagram_png: Path | None = None,
 ) -> None:
     template_file = Path(template_path)
+    if not template_file.exists():
+        from app.config import get_settings
+        fallback = get_settings().templates_dir / "default.pptx"
+        if fallback.exists():
+            template_file = fallback
+        else:
+            candidates = sorted(get_settings().templates_dir.glob("*.pptx"))
+            if candidates:
+                template_file = candidates[0]
+
     out_file = Path(out_path)
     out_file.parent.mkdir(parents=True, exist_ok=True)
 
