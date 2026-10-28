@@ -48,14 +48,14 @@ def manifest_capabilities(manifest: TemplateManifest) -> dict[str, dict[str, Any
 async def extract_facts(
     repo_digest: RepoDigest,
     pitch_notes: str,
-    chat_digest: ChatDigest,
+    chat_digest: ChatDigest | None,
     criteria: str,
 ) -> ProjectFacts:
     prompt = load_prompt(
         "facts",
         repo_digest=repo_digest.model_dump_json(exclude={"known_paths"}),
         pitch_notes=pitch_notes,
-        chat_digest=chat_digest.model_dump_json(),
+        chat_digest=chat_digest.model_dump_json() if chat_digest is not None else "",
         criteria=criteria,
     )
     return await generate_structured(prompt, ProjectFacts)

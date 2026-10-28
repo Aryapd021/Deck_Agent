@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from abc import ABC, abstractmethod
 from functools import lru_cache
 import json
@@ -9,6 +11,8 @@ from pydantic import BaseModel, ValidationError
 
 from app.config import get_settings
 from app.core.errors import ApiError, ErrorCode
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -59,6 +63,7 @@ async def _call_provider_safe(provider: LLMProvider, prompt: str) -> str:
     except ApiError:
         raise
     except Exception as e:
+        logger.exception("LLM provider complete_json failed: %s", e)
         raise ApiError(
             ErrorCode.LLM_INVALID_OUTPUT,
             "LLM call failed",
