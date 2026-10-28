@@ -1,9 +1,30 @@
 from pathlib import Path
+import struct
 
 from pptx import Presentation
+from pptx.parts.image import Image
 
 from app.models.api import TemplateManifest
 from app.models.deck import Deck
+from app.services.template_inspector import resolve_picture_target
+
+
+def _get_png_dimensions(png_path: Path) -> tuple[int, int]:
+    try:
+        with open(png_path, "rb") as f:
+            header = f.read(24)
+            if (
+                len(header) >= 24
+                and header[:8] == b"\x89PNG\r\n\x1a\n"
+                and header[12:16] == b"IHDR"
+            ):
+                w, h = struct.unpack(">II", header[16:24])
+                if w > 0 and h > 0:
+                    return w, h
+    except Exception:
+        pass
+    img = Image.from_file(str(png_path))
+    return img.size
 
 
 def render_deck(
@@ -66,9 +87,95 @@ def render_deck(
                         p.text = bullet.text
                         p.level = 0
 
-            # Image insertion is Day 3 (when image_ref == "diagram" do nothing yet)
+            # Image insertion for diagram
             if slide.image_ref == "diagram" and diagram_png is not None:
-                pass
+                diagram_file = Path(diagram_png)
+                if diagram_file.exists() and diagram_file.is_file():
+                    target = resolve_picture_target(manifest, st_key)
+                    if target is not None:
+                        img_w, img_h = _get_png_dimensions(diagram_file)
+                        if img_w > 0 and img_h > 0:
+                            if target.kind == "placeholder":
+                                box_left = target.left
+                                box_top = target.top
+                                box_width = target.width
+                                box_height = target.height
+
+                                scale = min(box_width / img_w, box_height / img_h)
+                                pic_width = int(img_w * scale)
+                                pic_height = int(img_h * scale)
+                                pic_left = box_left + int((box_width - pic_width) / 2)
+                                pic_top = box_top + int((box_height - pic_height) / 2)
+
+                                pptx_slide.shapes.add_picture(
+                                    str(diagram_file),
+                                    pic_left,
+                                    pic_top,
+                                    pic_width,
+                                    pic_height,
+                                )
+
+                                # Remove the empty picture placeholder element
+                                if target.idx is not None and target.idx in ph_by_idx:
+                                    pic_ph = ph_by_idx[target.idx]
+                                    sp = pic_ph._element
+                                    parent = sp.getparent()
+                                    if parent is not None:
+                                        parent.remove(sp)
+
+                            elif target.kind == "area":
+                                if slide.bullets:
+                                    body_ph = (
+                                        ph_by_idx.get(slot.body_idx)
+                                        if slot and slot.body_idx is not None
+                                        else None
+                                    )
+                                    orig_left = body_ph.left if body_ph else target.left
+                                    orig_top = body_ph.top if body_ph else target.top
+                                    orig_width = body_ph.width if body_ph else target.width
+                                    orig_height = body_ph.height if body_ph else target.height
+
+                                    new_body_width = int(orig_width * 0.35)
+                                    if body_ph:
+                                        body_ph.width = new_body_width
+
+                                    rem_left = orig_left + new_body_width
+                                    rem_width = orig_width - new_body_width
+                                    rem_top = orig_top
+                                    rem_height = orig_height
+
+                                    scale = min(rem_width / img_w, rem_height / img_h)
+                                    pic_width = int(img_w * scale)
+                                    pic_height = int(img_h * scale)
+                                    pic_left = rem_left + int((rem_width - pic_width) / 2)
+                                    pic_top = rem_top + int((rem_height - pic_height) / 2)
+
+                                    pptx_slide.shapes.add_picture(
+                                        str(diagram_file),
+                                        pic_left,
+                                        pic_top,
+                                        pic_width,
+                                        pic_height,
+                                    )
+                                else:
+                                    box_left = target.left
+                                    box_top = target.top
+                                    box_width = target.width
+                                    box_height = target.height
+
+                                    scale = min(box_width / img_w, box_height / img_h)
+                                    pic_width = int(img_w * scale)
+                                    pic_height = int(img_h * scale)
+                                    pic_left = box_left + int((box_width - pic_width) / 2)
+                                    pic_top = box_top + int((box_height - pic_height) / 2)
+
+                                    pptx_slide.shapes.add_picture(
+                                        str(diagram_file),
+                                        pic_left,
+                                        pic_top,
+                                        pic_width,
+                                        pic_height,
+                                    )
 
         # Speaker notes via notes_slide
         if slide.notes:

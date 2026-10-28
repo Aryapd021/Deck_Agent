@@ -787,6 +787,14 @@
       "notes_max": 600
     }
   },
-  "palette": null,
+  "palette": {
+    "text": "#000000",
+    "background": "#FFFFFF",
+    "dark2": "#1F497D",
+    "light2": "#EEECE1",
+    "primary": "#4F81BD",
+    "secondary": "#C0504D",
+    "accent": "#9BBB59"
+  },
   "warnings": []
 }

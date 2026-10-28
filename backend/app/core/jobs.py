@@ -30,9 +30,12 @@ from app.models.tables import (
     TemplateRow,
 )
 from app.services.chat_digest import digest
+from app.services.diagram import get_palette, render_diagram
 from app.services.extract import build_deck, extract_facts
 from app.services.ingest import build_repo_digest
+from app.services.preview import generate_previews
 from app.services.render import render_deck
+from app.services.template_inspector import extract_palette
 from app.services.validate import validate_deck
 
 logger = logging.getLogger(__name__)
@@ -462,19 +465,51 @@ async def run_generate(ctx: JobContext) -> JobResult:
         await ctx.emit(stage="deck", status="progress", message=w)
     await ctx.emit(stage="deck", status="done", message=f"Drafted {len(deck.slides)} slides")
 
-    # 6. diagram: skip for now (no event)
-
-    # 7. render: tmp_dir = new_temp_version_dir(pid, version); await to_thread(render_deck, deck, manifest, template_pptx_path(template_id), tmp_dir/"deck.pptx", None)
-    await ctx.emit(stage="render", status="started", message="Rendering PowerPoint deck...")
     tmp_dir = new_temp_version_dir(ctx.project_id, version)
     try:
         tmpl_path = template_pptx_path(template_id)
+
+        # 6. diagram: render_diagram into tmp_dir
+        await ctx.emit(stage="diagram", status="started", message="Rendering architecture diagram...")
+        palette = get_palette(manifest)
+        if manifest.palette is None:
+            lazy_palette = extract_palette(tmpl_path)
+            if lazy_palette:
+                palette = get_palette({"palette": lazy_palette})
+
+        if deck.diagram is not None:
+            await asyncio.to_thread(render_diagram, deck.diagram, palette, tmp_dir)
+            await ctx.emit(stage="diagram", status="done", message="Rendered architecture diagram")
+        else:
+            await ctx.emit(stage="diagram", status="done", message="skipped")
+
+        # 7. render: pass diagram_png=tmp_dir/"diagram.png" to render_deck
+        await ctx.emit(stage="render", status="started", message="Rendering PowerPoint deck...")
         out_pptx = tmp_dir / "deck.pptx"
-        await asyncio.to_thread(render_deck, deck, manifest, tmpl_path, out_pptx, None)
+        diagram_png = tmp_dir / "diagram.png"
+        await asyncio.to_thread(
+            render_deck,
+            deck,
+            manifest,
+            tmpl_path,
+            out_pptx,
+            diagram_png if diagram_png.exists() else None,
+        )
         await ctx.emit(stage="render", status="done", message="Rendered PowerPoint presentation")
 
-        # 8. preview: skip for now (no event)
+        # 8. preview: generate_previews(tmp_dir/"deck.pptx", tmp_dir)
+        await ctx.emit(stage="preview", status="started", message="Generating slide previews...")
+        try:
+            previews = await asyncio.to_thread(generate_previews, out_pptx, tmp_dir)
+            if not previews:
+                await ctx.emit(stage="preview", status="done", message="skipped")
+            else:
+                await ctx.emit(stage="preview", status="done", message=f"Generated {len(previews)} slide previews")
+        except Exception as e:
+            logger.warning("Preview generation failed: %s", e)
+            await ctx.emit(stage="preview", status="done", message="skipped")
 
+        # commit_version
         await commit_version(
             project_id=ctx.project_id,
             version=version,

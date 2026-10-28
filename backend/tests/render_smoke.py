@@ -8,6 +8,7 @@ from app.core.storage import (
     project_dir,
     template_pptx_path,
 )
+from app.services.diagram import get_palette, render_diagram
 from app.services.render import render_deck
 from app.services.template_inspector import load_manifest
 from tests.fixtures.sample_deck import build_sample_deck
@@ -32,11 +33,17 @@ def main() -> None:
     template_path = template_pptx_path(template_id)
     out_pptx = tmp_dir / "deck.pptx"
 
+    diagram_png_path = None
+    if deck.diagram is not None:
+        palette = get_palette(manifest)
+        _, diagram_png_path = render_diagram(deck.diagram, palette, tmp_dir)
+
     render_deck(
         deck=deck,
         manifest=manifest,
         template_path=template_path,
         out_path=out_pptx,
+        diagram_png=diagram_png_path,
     )
 
     deck_json_path = tmp_dir / "deck.json"

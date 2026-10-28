@@ -189,8 +189,18 @@ async def test_full_generate_pipeline(tmp_path: Path, monkeypatch: pytest.Monkey
                 if not stages_in_order or stages_in_order[-1] != stage:
                     stages_in_order.append(stage)
 
-    # Asserts the event stages arrive in order ingest, redact, digest, facts, deck, render, done
-    assert stages_in_order == ["ingest", "redact", "digest", "facts", "deck", "render", "done"]
+    # Asserts the event stages arrive in order ingest, redact, digest, facts, deck, diagram, render, preview, done
+    assert stages_in_order == [
+        "ingest",
+        "redact",
+        "digest",
+        "facts",
+        "deck",
+        "diagram",
+        "render",
+        "preview",
+        "done",
+    ]
 
     # Assert deck_version row and v1/deck.pptx exist
     with session_scope() as session:
@@ -213,9 +223,12 @@ async def test_full_generate_pipeline(tmp_path: Path, monkeypatch: pytest.Monkey
             )
         ).all()
         assert any(a.kind == "pptx" for a in artifacts)
+        assert any(a.kind == "diagram" for a in artifacts)
 
     v1_dir = version_dir(project_id, 1)
     assert (v1_dir / "deck.pptx").exists()
+    assert (v1_dir / "diagram.png").exists()
+    assert (v1_dir / "diagram.svg").exists()
     assert (v1_dir / "deck.json").exists()
     assert (v1_dir / "facts.json").exists()
 
@@ -331,3 +344,93 @@ async def test_sequential_generate_yields_v1_then_v2(
     v2_dir = version_dir(project_id, 2)
     assert (v2_dir / "deck.pptx").exists()
     assert (v1_dir / "deck.pptx").exists()
+
+
+@pytest.mark.asyncio
+async def test_generate_pipeline_dot_missing_fails_job(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    repo_path = _create_fixture_repo(tmp_path)
+    template_id = "tmpl_1"
+    _create_template(template_id)
+
+    project_id = "proj_dot_fail"
+    with session_scope() as session:
+        proj = ProjectRow(
+            id=project_id,
+            name="Dot Fail Test",
+            repo_ref=repo_path.as_posix(),
+            template_id=template_id,
+            created_at=datetime.now(timezone.utc),
+        )
+        session.add(proj)
+
+    sample_deck = build_sample_deck(template_id, project_id)
+    fake_provider = PipelineFakeProvider(sample_deck)
+    monkeypatch.setattr(llm_base, "get_provider", lambda: fake_provider)
+
+    # Force shutil.which and local dot to return None/False
+    monkeypatch.setattr("shutil.which", lambda bin_name: None if bin_name == "dot" else "soffice")
+    monkeypatch.setattr("pathlib.Path.exists", lambda self: False if "dot.exe" in str(self) else True)
+
+    await try_acquire(project_id)
+    job_id = await start_job(project_id, "generate", run_generate)
+    await asyncio.gather(*list(_running_tasks), return_exceptions=True)
+
+    with session_scope() as session:
+        job = session.get(JobRow, job_id)
+        assert job.status == "error"
+        assert job.error_code == "TOOL_MISSING"
+
+
+@pytest.mark.asyncio
+async def test_generate_pipeline_preview_failure_does_not_fail_job(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    repo_path = _create_fixture_repo(tmp_path)
+    template_id = "tmpl_1"
+    _create_template(template_id)
+
+    project_id = "proj_preview_resilient"
+    with session_scope() as session:
+        proj = ProjectRow(
+            id=project_id,
+            name="Preview Resilient Test",
+            repo_ref=repo_path.as_posix(),
+            template_id=template_id,
+            created_at=datetime.now(timezone.utc),
+        )
+        session.add(proj)
+
+    sample_deck = build_sample_deck(template_id, project_id)
+    fake_provider = PipelineFakeProvider(sample_deck)
+    monkeypatch.setattr(llm_base, "get_provider", lambda: fake_provider)
+
+    # Monkeypatch generate_previews to throw
+    def _exploding_previews(*args, **kwargs):
+        raise RuntimeError("LibreOffice crashed")
+
+    monkeypatch.setattr("app.core.jobs.generate_previews", _exploding_previews)
+
+    await try_acquire(project_id)
+    job_id = await start_job(project_id, "generate", run_generate)
+
+    chunks = []
+    async for chunk in event_stream(job_id):
+        chunks.append(chunk)
+
+    preview_events = []
+    for chunk in chunks:
+        for line in chunk.splitlines():
+            if line.startswith("data: "):
+                payload = json.loads(line[6:])
+                if payload["stage"] == "preview":
+                    preview_events.append(payload)
+
+    # Preview stage emitted skipped and job succeeded
+    assert any(e["message"] == "skipped" for e in preview_events)
+
+    with session_scope() as session:
+        job = session.get(JobRow, job_id)
+        assert job.status == "done"
+

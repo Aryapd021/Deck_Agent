@@ -1,5 +1,8 @@
+from dataclasses import dataclass
 import math
 from pathlib import Path
+from typing import Literal
+import xml.etree.ElementTree as ET
 
 from pptx import Presentation
 from pptx.enum.shapes import PP_PLACEHOLDER
@@ -278,6 +281,67 @@ def _compute_slots_and_limits(
     return slots, limits, warnings, final_layout_map
 
 
+def extract_palette(pptx_path: Path | str) -> dict[str, str]:
+    """Read the theme part of the first master and parse a:clrScheme;
+    return keys background (lt1), text (dk1), primary (accent1), secondary (accent2),
+    accent (accent3), plus dark2/light2 if present, as "#RRGGBB" strings (srgbClr val, or sysClr lastClr).
+    On any parsing problem return {} so callers use the default.
+    """
+    try:
+        prs = Presentation(str(pptx_path))
+        if not prs.slide_masters:
+            return {}
+        master = prs.slide_masters[0]
+        theme_part = None
+        for rel in master.part.rels.values():
+            if "theme" in rel.reltype:
+                theme_part = rel.target_part
+                break
+        if theme_part is None:
+            return {}
+
+        root = ET.fromstring(theme_part.blob)
+        clr_scheme = None
+        for elem in root.iter():
+            if elem.tag.endswith("clrScheme"):
+                clr_scheme = elem
+                break
+        if clr_scheme is None:
+            return {}
+
+        scheme_map = {
+            "lt1": "background",
+            "dk1": "text",
+            "accent1": "primary",
+            "accent2": "secondary",
+            "accent3": "accent",
+            "dk2": "dark2",
+            "lt2": "light2",
+        }
+
+        palette: dict[str, str] = {}
+        for child in clr_scheme:
+            tag_name = child.tag.split("}")[-1]
+            if tag_name in scheme_map:
+                key = scheme_map[tag_name]
+                hex_val = None
+                for sub in child:
+                    sub_tag = sub.tag.split("}")[-1]
+                    if sub_tag == "srgbClr":
+                        hex_val = sub.get("val")
+                        break
+                    elif sub_tag == "sysClr":
+                        hex_val = sub.get("lastClr")
+                        break
+                if hex_val:
+                    hex_val = hex_val.strip().lstrip("#")
+                    if len(hex_val) == 6:
+                        palette[key] = f"#{hex_val.upper()}"
+        return palette
+    except Exception:
+        return {}
+
+
 def inspect_template(pptx_path: Path, template_id: str, name: str) -> TemplateManifest:
     path = Path(pptx_path)
     if not path.exists():
@@ -352,6 +416,7 @@ def inspect_template(pptx_path: Path, template_id: str, name: str) -> TemplateMa
 
     slide_width = int(prs.slide_width)
     slide_height = int(prs.slide_height)
+    palette = extract_palette(path)
 
     return TemplateManifest(
         template_id=template_id,
@@ -362,7 +427,7 @@ def inspect_template(pptx_path: Path, template_id: str, name: str) -> TemplateMa
         layout_map=final_layout_map,
         slots=slots,
         limits=limits,
-        palette=None,
+        palette=palette if palette else None,
         warnings=warnings,
     )
 
@@ -404,3 +469,68 @@ def load_manifest(template_id: str) -> TemplateManifest:
         )
     content = target_path.read_text(encoding="utf-8")
     return TemplateManifest.model_validate_json(content)
+
+
+@dataclass
+class PictureTarget:
+    kind: Literal["placeholder", "area"]
+    idx: int | None
+    left: int
+    top: int
+    width: int
+    height: int
+    shrink_body: bool = False
+
+
+def resolve_picture_target(
+    manifest: TemplateManifest, slide_type: str
+) -> PictureTarget | None:
+    """Resolves the picture insertion target for a given slide type on the fly.
+    If manifest.slots[type].picture_idx is set -> kind 'placeholder' with that idx and its box;
+    else if body_idx is set -> kind 'area' using the body placeholder's box and shrink_body=True;
+    else a default area with 8 percent margins of the slide.
+    """
+    if not manifest:
+        return None
+
+    layout_idx = manifest.layout_map.get(slide_type)
+    layout_info = next((l for l in manifest.layouts if l.index == layout_idx), None)
+    ph_map = {ph.idx: ph for ph in layout_info.placeholders} if layout_info else {}
+
+    slot = manifest.slots.get(slide_type)
+    if slot is not None and slot.picture_idx is not None and slot.picture_idx in ph_map:
+        ph = ph_map[slot.picture_idx]
+        return PictureTarget(
+            kind="placeholder",
+            idx=slot.picture_idx,
+            left=ph.left,
+            top=ph.top,
+            width=ph.width,
+            height=ph.height,
+            shrink_body=False,
+        )
+
+    if slot is not None and slot.body_idx is not None and slot.body_idx in ph_map:
+        ph = ph_map[slot.body_idx]
+        return PictureTarget(
+            kind="area",
+            idx=slot.body_idx,
+            left=ph.left,
+            top=ph.top,
+            width=ph.width,
+            height=ph.height,
+            shrink_body=True,
+        )
+
+    margin_x = int(manifest.slide_width * 0.08)
+    margin_y = int(manifest.slide_height * 0.08)
+    return PictureTarget(
+        kind="area",
+        idx=None,
+        left=margin_x,
+        top=margin_y,
+        width=manifest.slide_width - 2 * margin_x,
+        height=manifest.slide_height - 2 * margin_y,
+        shrink_body=False,
+    )
+
