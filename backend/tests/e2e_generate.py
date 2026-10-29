@@ -88,10 +88,11 @@ def run_e2e(
                     status = event_data.get("status")
                     message = event_data.get("message")
                     version = event_data.get("version")
-                    print(f"      [{stage.upper()}] status={status} msg={message!r}")
+                    elapsed_now = time.time() - start_time
+                    print(f"      [{stage.upper():<10}] ({elapsed_now:.2f}s) status={status} msg={message!r}")
 
                     if not stages_seen or stages_seen[-1] != stage:
-                        stages_seen.append(stage)
+                        stages_seen.append((stage, elapsed_now))
 
                     if stage == "done" or status == "error":
                         terminal_status = status
