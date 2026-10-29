@@ -1,8 +1,9 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useDeck } from "../api/hooks";
-import { diagramUrl, getHealth, pptxUrl, slidePngUrl } from "../api/client";
+import { useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useDeck, usePatchDeck, useTemplates } from "../api/hooks";
+import { ApiError, diagramUrl, getHealth, pptxUrl, slidePngUrl } from "../api/client";
 import type { HealthResponse, S } from "../api/client";
+import { VersionBar } from "./VersionBar";
 
 type DeckSlide = S["Slide"];
 type DeckBullet = S["Field"];
@@ -11,14 +12,123 @@ interface DeckPaneProps {
   projectId: string | null;
   selectedSlideId: string | null;
   onSelectSlide: (slideId: string) => void;
+  isJobRunning?: boolean;
+}
+
+interface NeedsInputBulletProps {
+  projectId: string;
+  version: number;
+  slideId: string;
+  bulletIndex: number;
+  initialText: string;
+  maxLength: number;
+  isJobRunning?: boolean;
+}
+
+function NeedsInputBullet({
+  projectId,
+  version,
+  slideId,
+  bulletIndex,
+  initialText,
+  maxLength,
+  isJobRunning,
+}: NeedsInputBulletProps) {
+  const [text, setText] = useState(initialText);
+  const [prevInitial, setPrevInitial] = useState(initialText);
+  if (prevInitial !== initialText) {
+    setPrevInitial(initialText);
+    setText(initialText);
+  }
+  const [isSaving, setIsSaving] = useState(false);
+  const [staleError, setStaleError] = useState<string | null>(null);
+  const isSavingRef = useRef(false);
+
+  const queryClient = useQueryClient();
+  const patchMutation = usePatchDeck();
+
+  async function handleSave() {
+    const trimmed = text.trim();
+    if (!trimmed || trimmed === initialText || isSavingRef.current || isJobRunning) {
+      return;
+    }
+
+    isSavingRef.current = true;
+    setIsSaving(true);
+    setStaleError(null);
+
+    try {
+      await patchMutation.mutateAsync({
+        projectId,
+        data: {
+          base_version: version,
+          slide_id: slideId,
+          target: "bullet",
+          bullet_index: bulletIndex,
+          text: trimmed,
+        },
+      });
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["deck", projectId] }),
+        queryClient.invalidateQueries({ queryKey: ["versions", projectId] }),
+      ]);
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.code === "STALE_VERSION") {
+        setStaleError("The deck changed since you loaded it. Refreshing...");
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["deck", projectId] }),
+          queryClient.invalidateQueries({ queryKey: ["versions", projectId] }),
+        ]);
+      } else if (err instanceof ApiError) {
+        setStaleError(err.message);
+      } else if (err instanceof Error) {
+        setStaleError(err.message);
+      } else {
+        setStaleError("Failed to save changes");
+      }
+    } finally {
+      setIsSaving(false);
+      isSavingRef.current = false;
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void handleSave();
+    }
+  }
+
+  return (
+    <div className="w-full flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
+      <input
+        type="text"
+        value={text}
+        maxLength={maxLength}
+        disabled={Boolean(isJobRunning) || isSaving}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={() => void handleSave()}
+        className="w-full px-2 py-1 text-xs bg-slate-900 border border-amber-600/60 rounded text-amber-100 placeholder-amber-400/50 focus:outline-none focus:ring-1 focus:ring-amber-500 disabled:opacity-60 disabled:cursor-not-allowed"
+      />
+      {staleError && (
+        <span className="text-[11px] text-rose-400 font-medium">
+          {staleError}
+        </span>
+      )}
+    </div>
+  );
 }
 
 export function DeckPane({
   projectId,
   selectedSlideId,
   onSelectSlide,
+  isJobRunning,
 }: DeckPaneProps) {
   const { data: deckResp, isLoading: loadingDeck } = useDeck(projectId);
+  const { data: templates } = useTemplates();
   const { data: health } = useQuery<HealthResponse, Error>({
     queryKey: ["health"],
     queryFn: getHealth,
@@ -159,6 +269,7 @@ export function DeckPane({
 
         {!loadingDeck && deck && activeTab === "slides" && (
           <div className="flex flex-col gap-5 max-w-3xl mx-auto pb-8">
+            <VersionBar projectId={projectId} isJobRunning={isJobRunning} />
             {deck.slides.map((slide: DeckSlide, index: number) => {
               const slideNum = index + 1;
               const isSelected = selectedSlideId === slide.id;
@@ -226,6 +337,11 @@ export function DeckPane({
                       <div className="flex flex-col gap-1.5 pt-1">
                         {slide.bullets.map((bullet: DeckBullet, bIdx: number) => {
                           const isNeedsInput = bullet.source === "needs_input";
+                          const currentTemplate = templates?.find((t) => t.id === deck?.template_id);
+                          const slideTypeStr = typeof slide.type === "string" ? slide.type : String(slide.type);
+                          const limits = currentTemplate?.manifest?.limits?.[slideTypeStr];
+                          const bulletMax = limits?.bullet_max ?? 100;
+
                           return (
                             <div
                               key={bIdx}
@@ -235,12 +351,26 @@ export function DeckPane({
                                   : "bg-slate-950/70 border border-slate-800/60 text-slate-200"
                               }`}
                             >
-                              <div className="flex-1">
-                                <span className="leading-relaxed">{bullet.text}</span>
-                                {bullet.source === "repo" && bullet.evidence && (
-                                  <span className="block mt-0.5 text-[10px] font-mono text-cyan-400/80">
-                                    evidence: {bullet.evidence}
-                                  </span>
+                              <div className="flex-1 min-w-0">
+                                {isNeedsInput && projectId && version ? (
+                                  <NeedsInputBullet
+                                    projectId={projectId}
+                                    version={version}
+                                    slideId={slide.id || ""}
+                                    bulletIndex={bIdx}
+                                    initialText={bullet.text}
+                                    maxLength={bulletMax}
+                                    isJobRunning={isJobRunning}
+                                  />
+                                ) : (
+                                  <>
+                                    <span className="leading-relaxed">{bullet.text}</span>
+                                    {bullet.source === "repo" && bullet.evidence && (
+                                      <span className="block mt-0.5 text-[10px] font-mono text-cyan-400/80">
+                                        evidence: {bullet.evidence}
+                                      </span>
+                                    )}
+                                  </>
                                 )}
                               </div>
                               <div className="shrink-0 mt-0.5">

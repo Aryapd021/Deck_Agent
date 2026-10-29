@@ -107,6 +107,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{id}/edit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Edit Deck */
+        post: operations["edit_deck_api_projects__id__edit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jobs/{job_id}/events": {
         parameters: {
             query?: never;
@@ -135,6 +152,41 @@ export interface paths {
         get: operations["get_latest_deck_api_projects__id__deck_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Deck */
+        patch: operations["patch_deck_api_projects__id__deck_patch"];
+        trace?: never;
+    };
+    "/api/projects/{id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Versions */
+        get: operations["list_versions_api_projects__id__versions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo Deck */
+        post: operations["undo_deck_api_projects__id__undo_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -238,6 +290,22 @@ export interface components {
             slides: components["schemas"]["Slide"][];
             diagram?: components["schemas"]["ComponentGraph"] | null;
         };
+        /** DeckPatchRequest */
+        DeckPatchRequest: {
+            /** Base Version */
+            base_version: number;
+            /** Slide Id */
+            slide_id: string;
+            /**
+             * Target
+             * @enum {string}
+             */
+            target: "title" | "subtitle" | "bullet";
+            /** Bullet Index */
+            bullet_index?: number | null;
+            /** Text */
+            text: string;
+        };
         /** DeckResponse */
         DeckResponse: {
             /** Version */
@@ -259,6 +327,15 @@ export interface components {
             to: string;
             /** Label */
             label?: string | null;
+        };
+        /** EditRequest */
+        EditRequest: {
+            /** Command */
+            command: string;
+            /** Base Version */
+            base_version: number;
+            /** Target Slide Id */
+            target_slide_id?: string | null;
         };
         /** Field */
         Field: {
@@ -498,6 +575,20 @@ export interface components {
             /** Context */
             ctx?: Record<string, never>;
         };
+        /** VersionInfo */
+        VersionInfo: {
+            /** Version */
+            version: number;
+            /**
+             * Created By
+             * @enum {string}
+             */
+            created_by: "generate" | "edit" | "undo" | "manual";
+            /** Summary */
+            summary: string;
+            /** Created At */
+            created_at: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -714,6 +805,41 @@ export interface operations {
             };
         };
     };
+    edit_deck_api_projects__id__edit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_job_events_api_jobs__job_id__events_get: {
         parameters: {
             query?: never;
@@ -746,6 +872,103 @@ export interface operations {
         };
     };
     get_latest_deck_api_projects__id__deck_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeckResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_deck_api_projects__id__deck_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeckPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeckResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_versions_api_projects__id__versions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undo_deck_api_projects__id__undo_post: {
         parameters: {
             query?: never;
             header?: never;

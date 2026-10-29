@@ -11,14 +11,17 @@ from sqlmodel import func, select
 
 from app.core.errors import ApiError, ErrorCode
 from app.core.storage import (
+    copy_version_dir,
     finalize_version_dir,
     new_temp_version_dir,
     rel_to_storage,
     template_pptx_path,
+    version_dir,
 )
 from app.db import session_scope
-from app.models.api import JobEvent, TemplateManifest
+from app.models.api import EditRequest, JobEvent, TemplateManifest
 from app.models.deck import Deck
+from app.models.edit_ops import SetDiagramFocus
 from app.models.facts import ChatDigest, ProjectFacts
 from app.models.tables import (
     ArtifactRow,
@@ -31,12 +34,14 @@ from app.models.tables import (
 )
 from app.services.chat_digest import digest
 from app.services.diagram import get_palette, render_diagram
+from app.services.edit import apply_ops, EditRejected, interpret_command
 from app.services.extract import build_deck, extract_facts
 from app.services.ingest import build_repo_digest
 from app.services.preview import generate_previews
 from app.services.render import render_deck
 from app.services.template_inspector import extract_palette
-from app.services.validate import validate_deck
+from app.services.validate import enforce_fit, validate_deck
+
 
 logger = logging.getLogger(__name__)
 
@@ -463,7 +468,11 @@ async def run_generate(ctx: JobContext) -> JobResult:
     deck = report.deck
     for w in report.warnings:
         await ctx.emit(stage="deck", status="progress", message=w)
+    deck, fit_warnings = await enforce_fit(deck, manifest, use_llm=True)
+    for w in fit_warnings:
+        await ctx.emit(stage="deck", status="progress", message=w)
     await ctx.emit(stage="deck", status="done", message=f"Drafted {len(deck.slides)} slides")
+
 
     tmp_dir = new_temp_version_dir(ctx.project_id, version)
     try:
@@ -525,3 +534,142 @@ async def run_generate(ctx: JobContext) -> JobResult:
         raise
 
     return JobResult(version=version, message=f"Deck v{version} ready")
+
+
+async def run_edit(ctx: JobContext, req: EditRequest) -> JobResult:
+    with session_scope() as session:
+        project = session.get(ProjectRow, ctx.project_id)
+        if not project:
+            raise ApiError(ErrorCode.NOT_FOUND, f"Project {ctx.project_id} not found")
+
+        template = session.get(TemplateRow, project.template_id)
+        if not template:
+            raise ApiError(ErrorCode.NOT_FOUND, f"Template {project.template_id} not found")
+
+        template_id = project.template_id
+        manifest = TemplateManifest.model_validate_json(template.manifest_json)
+
+        stmt = select(DeckVersionRow).where(
+            DeckVersionRow.project_id == ctx.project_id,
+            DeckVersionRow.version == req.base_version,
+        )
+        base_v_row = session.exec(stmt).first()
+        if not base_v_row:
+            raise ApiError(ErrorCode.NOT_FOUND, f"Base version {req.base_version} not found")
+
+        deck = Deck.model_validate_json(base_v_row.deck_json)
+
+    base_dir = version_dir(ctx.project_id, req.base_version)
+    facts_path = base_dir / "facts.json"
+    facts: ProjectFacts | None = None
+    if facts_path.exists():
+        try:
+            facts = ProjectFacts.model_validate_json(facts_path.read_text(encoding="utf-8"))
+        except Exception:
+            facts = None
+
+    # 1. interpret
+    await ctx.emit(stage="interpret", status="started", message="Interpreting edit command...")
+    plan = await interpret_command(req.command, deck, facts, req.target_slide_id)
+    if not plan.ops:
+        await ctx.emit(stage="interpret", status="done", message="No changes planned")
+        return JobResult(None, plan.message or "I can't do that yet.")
+    await ctx.emit(stage="interpret", status="done", message=f"Planned {len(plan.ops)} changes")
+
+    # 2. validate and 3. apply
+    await ctx.emit(stage="validate", status="started", message="Validating edit plan...")
+    await ctx.emit(stage="validate", status="done", message="Validated")
+
+    await ctx.emit(stage="apply", status="started", message="Applying edits...")
+    try:
+        res = await apply_ops(deck, plan.ops, facts, manifest)
+        new_deck, summary = res[0], res[1]
+        fit_warnings = getattr(res, "warnings", [])
+    except EditRejected as exc:
+        await ctx.emit(stage="apply", status="done", message="Edit rejected")
+        return JobResult(None, f"Couldn't apply that: {exc}. Nothing was changed.")
+
+    for w in fit_warnings:
+        await ctx.emit(stage="apply", status="progress", message=w)
+
+    if fit_warnings:
+        summary = f"{summary} ({len(fit_warnings)} fields truncated)"
+
+    await ctx.emit(stage="apply", status="done", message=summary)
+
+
+    new_version = req.base_version + 1
+    tmp_dir = new_temp_version_dir(ctx.project_id, new_version)
+
+    try:
+        # Copy the whole base version dir first
+        await asyncio.to_thread(copy_version_dir, ctx.project_id, req.base_version, tmp_dir)
+
+        # 4. diagram (ONLY if the plan contains set_diagram_focus)
+        has_diagram_focus = any(isinstance(op, SetDiagramFocus) for op in plan.ops)
+        if has_diagram_focus:
+            await ctx.emit(stage="diagram", status="started", message="Rendering architecture diagram...")
+            tmpl_path = template_pptx_path(template_id)
+            palette = get_palette(manifest)
+            if manifest.palette is None:
+                lazy_palette = extract_palette(tmpl_path)
+                if lazy_palette:
+                    palette = get_palette({"palette": lazy_palette})
+
+            if new_deck.diagram is not None:
+                await asyncio.to_thread(render_diagram, new_deck.diagram, palette, tmp_dir)
+                await ctx.emit(stage="diagram", status="done", message="Rendered architecture diagram")
+            else:
+                await ctx.emit(stage="diagram", status="done", message="skipped")
+
+        # 5. render
+        await ctx.emit(stage="render", status="started", message="Rendering PowerPoint deck...")
+        tmpl_path = template_pptx_path(template_id)
+        out_pptx = tmp_dir / "deck.pptx"
+        diagram_png = tmp_dir / "diagram.png"
+        await asyncio.to_thread(
+            render_deck,
+            new_deck,
+            manifest,
+            tmpl_path,
+            out_pptx,
+            diagram_png if diagram_png.exists() else None,
+        )
+        await ctx.emit(stage="render", status="done", message="Rendered PowerPoint presentation")
+
+        # 6. preview
+        await ctx.emit(stage="preview", status="started", message="Generating slide previews...")
+        slides_dir = tmp_dir / "slides"
+        if slides_dir.exists():
+            for f in slides_dir.glob("*.png"):
+                try:
+                    f.unlink()
+                except Exception:
+                    pass
+
+        try:
+            previews = await asyncio.to_thread(generate_previews, out_pptx, tmp_dir)
+            if not previews:
+                await ctx.emit(stage="preview", status="done", message="skipped")
+            else:
+                await ctx.emit(stage="preview", status="done", message=f"Generated {len(previews)} slide previews")
+        except Exception as e:
+            logger.warning("Preview generation failed: %s", e)
+            await ctx.emit(stage="preview", status="done", message="skipped")
+
+        # commit_version
+        await commit_version(
+            project_id=ctx.project_id,
+            version=new_version,
+            deck=new_deck,
+            created_by="edit",
+            summary=summary,
+            tmp_dir=tmp_dir,
+            facts=None,
+        )
+    except Exception:
+        if tmp_dir.exists():
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise
+
+    return JobResult(version=new_version, message=summary)

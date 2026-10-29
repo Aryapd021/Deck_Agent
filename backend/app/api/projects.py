@@ -2,19 +2,28 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, status
-from sqlmodel import Session
+from sqlmodel import Session, func, select
 
 from app.core.errors import ApiError, ErrorCode
-from app.core.jobs import release, run_generate, start_job, try_acquire
+from app.core.jobs import (
+    JobContext,
+    JobResult,
+    release,
+    run_edit,
+    run_generate,
+    start_job,
+    try_acquire,
+)
 from app.db import get_session
 from app.models.api import (
     CreateProjectRequest,
+    EditRequest,
     InputsOut,
     InputsRequest,
     JobAccepted,
     ProjectOut,
 )
-from app.models.tables import ProjectInputRow, ProjectRow, TemplateRow
+from app.models.tables import DeckVersionRow, ProjectInputRow, ProjectRow, TemplateRow
 from app.services.chat_digest import redact
 
 router = APIRouter(tags=["projects"])
@@ -105,6 +114,44 @@ async def generate_deck(
     await try_acquire(id)
     try:
         job_id = await start_job(id, "generate", run_generate)
+    except Exception:
+        release(id)
+        raise
+
+    return JobAccepted(job_id=job_id)
+
+
+@router.post("/projects/{id}/edit", response_model=JobAccepted, status_code=status.HTTP_202_ACCEPTED)
+async def edit_deck(
+    id: str,
+    req: EditRequest,
+    session: Session = Depends(get_session),
+) -> JobAccepted:
+    project = session.get(ProjectRow, id)
+    if not project:
+        raise ApiError(ErrorCode.NOT_FOUND, f"Project {id} not found")
+
+    await try_acquire(id)
+    try:
+        stmt = (
+            select(func.max(DeckVersionRow.version))
+            .where(DeckVersionRow.project_id == id)
+        )
+        max_v = session.exec(stmt).first()
+        if max_v is None or max_v == 0:
+            raise ApiError(ErrorCode.NOT_FOUND, f"Project {id} has no deck versions")
+
+        if req.base_version != max_v:
+            raise ApiError(
+                ErrorCode.STALE_VERSION,
+                f"Base version {req.base_version} does not match current version {max_v}",
+                detail={"current_version": max_v, "base_version": req.base_version},
+            )
+
+        async def runner(ctx: JobContext) -> JobResult:
+            return await run_edit(ctx, req)
+
+        job_id = await start_job(id, "edit", runner)
     except Exception:
         release(id)
         raise

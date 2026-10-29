@@ -95,6 +95,7 @@ export default function App() {
             projectId={projectId}
             selectedSlideId={selectedSlideId}
             onSelectSlide={(slideId) => setSelectedSlideId(slideId)}
+            isJobRunning={isJobRunning}
           />
         </div>
 
@@ -106,6 +107,9 @@ export default function App() {
             events={events}
             terminal={terminal}
             error={jobError}
+            selectedSlideId={selectedSlideId}
+            isJobRunning={isJobRunning}
+            onJobStarted={handleJobStarted}
           />
         </div>
       </div>
