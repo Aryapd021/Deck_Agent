@@ -276,6 +276,54 @@ export function pptxUrl(projectId: string, n: number): string {
   return `/api/projects/${projectId}/v/${n}/deck.pptx`;
 }
 
+export async function downloadPptx(
+  projectId: string,
+  version: number,
+  deck?: Deck | null,
+): Promise<void> {
+  let blob: Blob | null = null;
+
+  // 1. First, attempt GET request for the pre-rendered pptx
+  try {
+    const res = await fetch(pptxUrl(projectId, version));
+    if (res.ok) {
+      blob = await res.blob();
+    }
+  } catch (e) {
+    console.warn("Direct pptx fetch failed, attempting export fallback", e);
+  }
+
+  // 2. If direct GET returned 404 or failed (serverless cold-start / container recycling), fall back to export endpoint
+  if (!blob && deck) {
+    try {
+      const exportRes = await fetch(`/api/projects/${projectId}/v/${version}/export`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deck }),
+      });
+      if (exportRes.ok) {
+        blob = await exportRes.blob();
+      }
+    } catch (e) {
+      console.error("Export endpoint failed", e);
+    }
+  }
+
+  if (!blob) {
+    throw new Error("Unable to download presentation file.");
+  }
+
+  // 3. Trigger programmatic browser download with clean filename
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", `deck_v${version}.pptx`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 export function diagramUrl(projectId: string, n: number): string {
   return `/api/projects/${projectId}/v/${n}/diagram.png`;
 }

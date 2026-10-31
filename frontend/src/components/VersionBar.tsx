@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDeck, useUndo, useVersions } from "../api/hooks";
-import { ApiError, pptxUrl } from "../api/client";
+import { ApiError, downloadPptx } from "../api/client";
 
 interface VersionBarProps {
   projectId: string | null;
@@ -14,6 +14,20 @@ export function VersionBar({ projectId, isJobRunning }: VersionBarProps) {
   const { data: deckResp } = useDeck(projectId);
   const undoMutation = useUndo();
   const [undoError, setUndoError] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState<boolean>(false);
+
+  async function handleDownload() {
+    if (!projectId || !currentVersion || isDownloading) return;
+    setIsDownloading(true);
+    try {
+      await downloadPptx(projectId, currentVersion, deckResp?.deck);
+    } catch (err) {
+      console.error("Download failed:", err);
+      alert("Failed to download presentation. Please try generating or editing again.");
+    } finally {
+      setIsDownloading(false);
+    }
+  }
 
   if (!projectId || versions.length === 0) {
     return null;
@@ -97,13 +111,14 @@ export function VersionBar({ projectId, isJobRunning }: VersionBarProps) {
           </button>
 
           {currentVersion ? (
-            <a
-              href={pptxUrl(projectId, currentVersion)}
-              download={`deck_v${currentVersion}.pptx`}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white transition flex items-center gap-1.5 shadow-sm"
+            <button
+              type="button"
+              onClick={() => void handleDownload()}
+              disabled={isDownloading}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-50 text-white transition flex items-center gap-1.5 shadow-sm"
             >
-              <span>Download</span>
-            </a>
+              <span>{isDownloading ? "Downloading..." : "Download"}</span>
+            </button>
           ) : (
             <span className="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-500 cursor-not-allowed">
               Download

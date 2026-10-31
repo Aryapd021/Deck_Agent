@@ -1,6 +1,7 @@
 from pathlib import Path
 import shutil
 import unittest.mock as mock
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
 from pptx import Presentation
@@ -212,3 +213,39 @@ def test_artifact_routes_path_traversal_and_invalid_inputs(test_client):
     assert res5.status_code == 404
     res6 = client.get("/api/projects/valid_id/v/1/slides/-5.png")
     assert res6.status_code == 404
+
+
+def test_export_deck_with_payload_on_cold_instance(test_client):
+    client, _ = test_client
+    project_id = uuid4().hex
+    deck_dict = {
+        "schema_version": 1,
+        "project_id": project_id,
+        "version": 1,
+        "template_id": "default",
+        "slides": [
+            {
+                "id": uuid4().hex,
+                "type": "title",
+                "title": {"text": "Cold Start Deck", "source": "user"},
+                "subtitle": {"text": "Serverless Presentation", "source": "user"},
+                "bullets": [],
+                "image_ref": None,
+                "notes": "",
+            }
+        ],
+        "diagram": None,
+    }
+
+    # Calling export with deck in request body on cold instance returns PPTX
+    res = client.post(f"/api/projects/{project_id}/v/1/export", json={"deck": deck_dict})
+    assert res.status_code == 200
+    assert "application/vnd.openxmlformats-officedocument.presentationml.presentation" in res.headers["content-type"]
+    assert "deck_v1.pptx" in res.headers["content-disposition"]
+    assert res.content[:4] == b"PK\x03\x04"
+
+    # Subsequent direct GET should now succeed as well
+    get_res = client.get(f"/api/projects/{project_id}/v/1/deck.pptx")
+    assert get_res.status_code == 200
+    assert get_res.content[:4] == b"PK\x03\x04"
+

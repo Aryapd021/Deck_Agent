@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDeck, usePatchDeck, useTemplates } from "../api/hooks";
-import { ApiError, diagramUrl, getHealth, pptxUrl, slidePngUrl } from "../api/client";
+import { ApiError, diagramUrl, downloadPptx, getHealth, slidePngUrl } from "../api/client";
 import type { HealthResponse, S } from "../api/client";
 import { VersionBar } from "./VersionBar";
 
@@ -138,6 +138,20 @@ export function DeckPane({
   const [failedPreviews, setFailedPreviews] = useState<Record<number, boolean>>({});
   const [diagramImgFailed, setDiagramImgFailed] = useState<boolean>(false);
   const [updatingLayoutSlideId, setUpdatingLayoutSlideId] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState<boolean>(false);
+
+  async function handleDownload() {
+    if (!projectId || !version || isDownloading) return;
+    setIsDownloading(true);
+    try {
+      await downloadPptx(projectId, version, deckResp?.deck);
+    } catch (err) {
+      console.error("Download failed:", err);
+      alert("Failed to download presentation. Please try generating or editing again.");
+    } finally {
+      setIsDownloading(false);
+    }
+  }
 
   const queryClient = useQueryClient();
   const patchMutation = usePatchDeck();
@@ -259,13 +273,14 @@ export function DeckPane({
 
         <div>
           {projectId && version ? (
-            <a
-              href={pptxUrl(projectId, version)}
-              download={`deck_v${version}.pptx`}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white transition flex items-center gap-1.5 shadow-sm"
+            <button
+              type="button"
+              onClick={() => void handleDownload()}
+              disabled={isDownloading}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-50 text-white transition flex items-center gap-1.5 shadow-sm"
             >
-              <span>Download .pptx</span>
-            </a>
+              <span>{isDownloading ? "Downloading..." : "Download .pptx"}</span>
+            </button>
           ) : (
             <span className="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-500 cursor-not-allowed">
               Download .pptx

@@ -278,6 +278,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{id}/v/{n}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Export Deck */
+        post: operations["export_deck_api_projects__id__v__n__export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{id}/v/{n}/diagram.png": {
         parameters: {
             query?: never;
@@ -393,6 +410,11 @@ export interface components {
             base_version: number;
             /** Target Slide Id */
             target_slide_id?: string | null;
+            deck?: components["schemas"]["Deck"] | null;
+        };
+        /** ExportDeckRequest */
+        ExportDeckRequest: {
+            deck?: components["schemas"]["Deck"] | null;
         };
         /** Field */
         Field: {
@@ -401,6 +423,8 @@ export interface components {
             source: components["schemas"]["Source"];
             /** Evidence */
             evidence?: string | null;
+            /** Heading */
+            heading?: string | null;
         };
         /** FitLimits */
         FitLimits: {
@@ -424,6 +448,11 @@ export interface components {
              * @default 600
              */
             notes_max: number;
+        };
+        /** GenerateRequest */
+        GenerateRequest: {
+            /** Template Id */
+            template_id?: string | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -563,8 +592,10 @@ export interface components {
             type: components["schemas"]["SlideType"];
             title: components["schemas"]["Field"];
             subtitle?: components["schemas"]["Field"] | null;
+            summary?: components["schemas"]["Field"] | null;
             /** Bullets */
             bullets?: components["schemas"]["Field"][];
+            takeaway?: components["schemas"]["Field"] | null;
             /** Image Ref */
             image_ref?: string | null;
             /**
@@ -865,6 +896,18 @@ export interface components {
             /** Slot Title */
             slot_title: string;
             /**
+             * Role
+             * @default body
+             */
+            role: string;
+            /** Rect */
+            rect?: [
+                number,
+                number,
+                number,
+                number
+            ] | null;
+            /**
              * Hint
              * @default
              */
@@ -1126,7 +1169,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["GenerateRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             202: {
@@ -1461,6 +1508,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_deck_api_projects__id__v__n__export_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ExportDeckRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
             };
             /** @description Validation Error */
             422: {
