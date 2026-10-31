@@ -20,6 +20,7 @@ from app.db import get_session
 from app.models.api import (
     CreateProjectRequest,
     EditRequest,
+    GenerateRequest,
     InputsOut,
     InputsRequest,
     JobAccepted,
@@ -116,11 +117,20 @@ async def update_inputs(
 @router.post("/projects/{id}/generate", response_model=JobAccepted, status_code=status.HTTP_202_ACCEPTED)
 async def generate_deck(
     id: str,
+    req: GenerateRequest | None = None,
     session: Session = Depends(get_session),
 ) -> JobAccepted:
     project = session.get(ProjectRow, id)
     if not project:
         raise ApiError(ErrorCode.NOT_FOUND, f"Project {id} not found")
+
+    if req and req.template_id:
+        tmpl = session.get(TemplateRow, req.template_id)
+        if not tmpl:
+            raise ApiError(ErrorCode.NOT_FOUND, f"Template {req.template_id} not found")
+        project.template_id = req.template_id
+        session.add(project)
+        session.commit()
 
     await try_acquire(id)
     try:

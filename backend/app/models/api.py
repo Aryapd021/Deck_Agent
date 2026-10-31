@@ -92,6 +92,10 @@ class InputsOut(BaseModel):
     criteria: str
 
 
+class GenerateRequest(BaseModel):
+    template_id: str | None = None
+
+
 class EditRequest(BaseModel):
     command: str
     base_version: int

@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useTemplates } from "../api/hooks";
+import { useDeck, useTemplates } from "../api/hooks";
 import {
   ApiError,
   createProject,
@@ -28,6 +28,7 @@ export function InputsPane({
 }: InputsPaneProps) {
   const queryClient = useQueryClient();
   const { data: templates, isLoading: loadingTemplates } = useTemplates();
+  const { data: deckResp } = useDeck(projectId);
 
   const [repoRef, setRepoRef] = useState<string>("");
   const [pitchNotes, setPitchNotes] = useState<string>("");
@@ -36,6 +37,12 @@ export function InputsPane({
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (deckResp?.deck?.template_id) {
+      setTemplateId(deckResp.deck.template_id);
+    }
+  }, [deckResp?.deck?.template_id]);
 
   function handleNewProject() {
     setStoredProjectId(null);
@@ -124,7 +131,9 @@ export function InputsPane({
         criteria: "",
       });
 
-      const accepted = await startGenerate(currentProjectId);
+      const accepted = await startGenerate(currentProjectId, {
+        template_id: effectiveTemplateId,
+      });
       setStoredJobId(currentProjectId, accepted.job_id);
       onJobStarted(accepted.job_id);
     } catch (err: unknown) {
@@ -209,10 +218,15 @@ export function InputsPane({
             <option value="">Default Template (Auto / Built-in)</option>
             {templates?.map((tmpl) => {
               const warningCount = tmpl.manifest?.warnings?.length ?? 0;
+              const mode = tmpl.manifest?.mode ?? "layouts";
+              const countDesc =
+                mode === "fill"
+                  ? `${Object.keys(tmpl.manifest?.slots ?? {}).length || tmpl.manifest?.profile?.slots?.length || 0} slots`
+                  : `${Object.keys(tmpl.manifest?.layout_map ?? {}).length || 0} layouts`;
               return (
                 <option key={tmpl.id} value={tmpl.id}>
-                  {tmpl.name}
-                  {warningCount > 0 ? ` (${warningCount} warnings)` : ""}
+                  {tmpl.name} ({mode} mode, {countDesc})
+                  {warningCount > 0 ? ` [${warningCount} warnings]` : ""}
                 </option>
               );
             })}

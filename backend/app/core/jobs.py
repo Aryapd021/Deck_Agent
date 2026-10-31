@@ -501,6 +501,14 @@ async def run_generate(ctx: JobContext) -> JobResult:
 
         # 7. render: pass diagram_png=tmp_dir/"diagram.png" to render_deck
         await ctx.emit(stage="render", status="started", message="Rendering PowerPoint deck...")
+        mode_val = getattr(manifest, "mode", "layouts")
+        n_count = len(manifest.slots) if mode_val == "fill" else len(manifest.layout_map)
+        n_label = "slots" if mode_val == "fill" else "layouts"
+        await ctx.emit(
+            stage="render",
+            status="progress",
+            message=f"Using template: {template.name} ({mode_val} mode, {n_count} {n_label})",
+        )
         out_pptx = tmp_dir / "deck.pptx"
         diagram_png = tmp_dir / "diagram.png"
         loop = asyncio.get_running_loop()

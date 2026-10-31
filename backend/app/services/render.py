@@ -1,5 +1,6 @@
 from pathlib import Path
 import struct
+import zipfile
 
 from pptx import Presentation
 from pptx.parts.image import Image
@@ -8,6 +9,7 @@ from pptx.enum.dml import MSO_COLOR_TYPE
 from pptx.enum.shapes import PP_PLACEHOLDER
 from pptx.util import Inches, Pt
 
+from app.core.errors import ApiError, ErrorCode
 from app.models.api import TemplateManifest
 from app.models.deck import Deck
 from app.services.design import (
@@ -764,6 +766,32 @@ def _render_legacy_slide_content(
                 parent.remove(sp)
 
 
+def _assert_template_fidelity(template_file: Path, out_file: Path, is_builtin_default: bool) -> None:
+    if is_builtin_default:
+        return
+    reopened = Presentation(str(out_file))
+    source_prs = Presentation(str(template_file))
+    source_layouts = [l.name for l in source_prs.slide_layouts]
+    out_layouts = [l.name for l in reopened.slide_layouts]
+    if out_layouts != source_layouts:
+        raise ApiError(
+            ErrorCode.TEMPLATE_INVALID,
+            f"Rendered with the wrong template: layout names do not match template ({out_layouts} != {source_layouts})",
+        )
+
+    with zipfile.ZipFile(str(template_file), "r") as z_src:
+        source_media = {Path(n).name for n in z_src.namelist() if n.startswith("ppt/media/")}
+    with zipfile.ZipFile(str(out_file), "r") as z_out:
+        out_media = {Path(n).name for n in z_out.namelist() if n.startswith("ppt/media/")}
+
+    for mf in source_media:
+        if mf not in out_media:
+            raise ApiError(
+                ErrorCode.TEMPLATE_INVALID,
+                f"Rendered with the wrong template: missing template media {mf}",
+            )
+
+
 def render_deck(
     deck: Deck,
     manifest: TemplateManifest,
@@ -818,6 +846,18 @@ def render_deck(
 
     mode = getattr(manifest, "mode", profile.mode if profile else "layouts")
     project_name = getattr(deck, "project_id", "") or "PROJECT DECK"
+
+    is_builtin_default = False
+    tmpl_name_lower = template_file.name.lower()
+    m_name_lower = (manifest.name or "").lower()
+    m_id = str(getattr(manifest, "template_id", getattr(manifest, "id", "")) or "")
+
+    if (
+        tmpl_name_lower in ("tmpl_1.pptx", "default.pptx", "default_tmpl.pptx")
+        or m_id in ("tmpl_1", "default", "test_tmpl_001")
+        or m_name_lower in ("default", "blank", "python-pptx", "default template")
+    ):
+        is_builtin_default = True
 
     # --- FILL MODE ---
     if mode == "fill" and len(prs.slides) > 0:
@@ -890,6 +930,7 @@ def render_deck(
                 pptx_slide.notes_slide.notes_text_frame.text = slide_model.notes
 
         prs.save(str(out_file))
+        _assert_template_fidelity(template_file, out_file, is_builtin_default)
         return
 
     # --- LAYOUTS MODE ---
@@ -897,19 +938,6 @@ def render_deck(
     for sldId in list(prs.slides._sldIdLst):
         prs.part.drop_rel(sldId.rId)
         prs.slides._sldIdLst.remove(sldId)
-
-    is_builtin_default = False
-    tmpl_name_lower = template_file.name.lower()
-    m_name_lower = (manifest.name or "").lower()
-    m_id = str(getattr(manifest, "template_id", getattr(manifest, "id", "")) or "")
-
-    if (
-        tmpl_name_lower in ("tmpl_1.pptx", "default.pptx", "default_tmpl.pptx")
-        or m_id in ("tmpl_1", "default", "test_tmpl_001")
-        or m_name_lower in ("default", "blank", "python-pptx", "default template")
-        or (prs.slide_width == 9144000 and prs.slide_height == 6858000)
-    ):
-        is_builtin_default = True
 
     slides_to_render = list(deck.slides)
     total_slides = len(slides_to_render)
@@ -1063,3 +1091,4 @@ def render_deck(
                 pptx_slide.notes_slide.notes_text_frame.text = slide.notes
 
     prs.save(str(out_file))
+    _assert_template_fidelity(template_file, out_file, is_builtin_default)

@@ -213,10 +213,15 @@ export async function putInputs(
   return request<InputsOut>("PUT", `/api/projects/${projectId}/inputs`, data);
 }
 
+export type GenerateRequest = {
+  template_id?: string | null;
+};
+
 export async function startGenerate(
   projectId: string,
+  data?: GenerateRequest,
 ): Promise<JobAccepted> {
-  return request<JobAccepted>("POST", `/api/projects/${projectId}/generate`);
+  return request<JobAccepted>("POST", `/api/projects/${projectId}/generate`, data);
 }
 
 export async function startEdit(
