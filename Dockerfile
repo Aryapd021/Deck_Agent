@@ -46,3 +46,4 @@ EXPOSE 8000
 
 # Start Uvicorn bound to the environment-provided PORT
 CMD ["sh", "-c", "uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port ${PORT}"]
+

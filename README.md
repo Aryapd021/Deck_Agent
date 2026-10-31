@@ -12,3 +12,4 @@ license: mit
 # DeckAgent
 
 Autonomous pitch deck generator with real-time editing, architecture diagrams, and slide preview.
+
