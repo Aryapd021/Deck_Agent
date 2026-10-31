@@ -56,6 +56,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/templates/{id}/mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Template Mode */
+        put: operations["update_template_mode_api_templates__id__mode_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects": {
         parameters: {
             query?: never;
@@ -118,6 +135,40 @@ export interface paths {
         put?: never;
         /** Edit Deck */
         post: operations["edit_deck_api_projects__id__edit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{id}/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Project Template */
+        put: operations["update_project_template_api_projects__id__template_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{id}/theme": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Project Theme */
+        put: operations["update_project_theme_api_projects__id__theme_put"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -277,7 +328,7 @@ export interface components {
         Deck: {
             /**
              * Schema Version
-             * @default 1
+             * @default 2
              */
             schema_version: number;
             /** Project Id */
@@ -289,6 +340,12 @@ export interface components {
             /** Slides */
             slides: components["schemas"]["Slide"][];
             diagram?: components["schemas"]["ComponentGraph"] | null;
+            /** Theme */
+            theme?: string | null;
+            /** Variant */
+            variant?: string | null;
+            /** Diagram Style */
+            diagram_style?: string | null;
         };
         /** DeckPatchRequest */
         DeckPatchRequest: {
@@ -485,6 +542,20 @@ export interface components {
             /** Created At */
             created_at: string;
         };
+        /** SetTemplateRequest */
+        SetTemplateRequest: {
+            /** Template Id */
+            template_id: string;
+            /** Mode */
+            mode?: ("fill" | "layouts") | null;
+        };
+        /** SetThemeRequest */
+        SetThemeRequest: {
+            /** Theme */
+            theme: string;
+            /** Variant */
+            variant?: string | null;
+        };
         /** Slide */
         Slide: {
             /** Id */
@@ -506,6 +577,24 @@ export interface components {
              * @default false
              */
             flagged: boolean;
+            /** Slot Index */
+            slot_index?: number | null;
+        };
+        /** SlideAnalysisReport */
+        SlideAnalysisReport: {
+            /** Slide Index */
+            slide_index: number;
+            /** Static Count */
+            static_count: number;
+            /** Fillable Count */
+            fillable_count: number;
+            /** Free Box */
+            free_box?: [
+                number,
+                number,
+                number,
+                number
+            ] | null;
         };
         /**
          * SlideType
@@ -558,6 +647,21 @@ export interface components {
             } | null;
             /** Warnings */
             warnings?: string[];
+            /**
+             * Mode
+             * @default layouts
+             * @enum {string}
+             */
+            mode: "fill" | "layouts";
+            profile?: components["schemas"]["TemplateProfile"] | null;
+        };
+        /** TemplateModeUpdate */
+        TemplateModeUpdate: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "fill" | "layouts";
         };
         /** TemplateOut */
         TemplateOut: {
@@ -566,6 +670,203 @@ export interface components {
             /** Name */
             name: string;
             manifest: components["schemas"]["TemplateManifest"];
+        };
+        /** TemplateProfile */
+        TemplateProfile: {
+            /** Slide Width */
+            slide_width: number;
+            /** Slide Height */
+            slide_height: number;
+            /**
+             * Scale
+             * @default 1
+             */
+            scale: number;
+            /**
+             * Aspect Ratio
+             * @default 16:9
+             */
+            aspect_ratio: string;
+            /**
+             * Dk1
+             * @default 000000
+             */
+            dk1: string;
+            /**
+             * Lt1
+             * @default FFFFFF
+             */
+            lt1: string;
+            /**
+             * Dk2
+             * @default 1F2937
+             */
+            dk2: string;
+            /**
+             * Lt2
+             * @default F6F7F9
+             */
+            lt2: string;
+            /**
+             * Accent1
+             * @default 006FC0
+             */
+            accent1: string;
+            /**
+             * Accent2
+             * @default 6B4FA0
+             */
+            accent2: string;
+            /**
+             * Accent3
+             * @default 1A9C8F
+             */
+            accent3: string;
+            /**
+             * Accent4
+             * @default F28C28
+             */
+            accent4: string;
+            /**
+             * Accent5
+             * @default 2E9E5B
+             */
+            accent5: string;
+            /**
+             * Accent6
+             * @default D9A441
+             */
+            accent6: string;
+            /**
+             * Major Font
+             * @default Calibri
+             */
+            major_font: string;
+            /**
+             * Minor Font
+             * @default Calibri
+             */
+            minor_font: string;
+            /**
+             * Background
+             * @default light
+             * @enum {string}
+             */
+            background: "dark" | "light";
+            /**
+             * Background Luminance
+             * @default light
+             * @enum {string}
+             */
+            background_luminance: "dark" | "light";
+            /**
+             * Theme Name
+             * @default
+             */
+            theme_name: string;
+            /**
+             * Role Primary
+             * @default 006FC0
+             */
+            role_primary: string;
+            /**
+             * Role Secondary
+             * @default 6B4FA0
+             */
+            role_secondary: string;
+            /**
+             * Role Tertiary
+             * @default 1A9C8F
+             */
+            role_tertiary: string;
+            /**
+             * Role Quaternary
+             * @default F28C28
+             */
+            role_quaternary: string;
+            /**
+             * Role Neutral
+             * @default 6B7280
+             */
+            role_neutral: string;
+            /**
+             * Primary
+             * @default 006FC0
+             */
+            primary: string;
+            /**
+             * Secondary
+             * @default 6B4FA0
+             */
+            secondary: string;
+            /**
+             * Tertiary
+             * @default 1A9C8F
+             */
+            tertiary: string;
+            /**
+             * Quaternary
+             * @default F28C28
+             */
+            quaternary: string;
+            /**
+             * Neutral
+             * @default 6B7280
+             */
+            neutral: string;
+            /** Accents */
+            accents?: string[];
+            /** Panels */
+            panels?: string[];
+            /**
+             * Corner Radius Ratio
+             * @default 0.025
+             */
+            corner_radius_ratio: number;
+            /**
+             * Padding Ratio
+             * @default 0.015
+             */
+            padding_ratio: number;
+            /**
+             * Gap Ratio
+             * @default 0.018
+             */
+            gap_ratio: number;
+            /**
+             * Base Body Size Pt
+             * @default 12
+             */
+            base_body_size_pt: number;
+            /**
+             * Min Body Size Pt
+             * @default 9
+             */
+            min_body_size_pt: number;
+            /**
+             * Mode
+             * @default layouts
+             * @enum {string}
+             */
+            mode: "fill" | "layouts";
+            /** Slots */
+            slots?: components["schemas"]["TemplateSlot"][];
+            /** Slide Reports */
+            slide_reports?: components["schemas"]["SlideAnalysisReport"][];
+            /** Analysis Reports */
+            analysis_reports?: components["schemas"]["SlideAnalysisReport"][];
+        };
+        /** TemplateSlot */
+        TemplateSlot: {
+            /** Slot Index */
+            slot_index: number;
+            /** Slot Title */
+            slot_title: string;
+            /**
+             * Hint
+             * @default
+             */
+            hint: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -711,6 +1012,41 @@ export interface operations {
             };
         };
     };
+    update_template_mode_api_templates__id__mode_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateModeUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_project_api_projects_post: {
         parameters: {
             query?: never;
@@ -832,6 +1168,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_project_template_api_projects__id__template_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetTemplateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_project_theme_api_projects__id__theme_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetThemeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionInfo"];
                 };
             };
             /** @description Validation Error */

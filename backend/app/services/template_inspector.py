@@ -1,15 +1,26 @@
+import colorsys
 from dataclasses import dataclass
 import math
 from pathlib import Path
-from typing import Literal
+import re
+from typing import Any, Literal
 import xml.etree.ElementTree as ET
 
 from pptx import Presentation
-from pptx.enum.shapes import PP_PLACEHOLDER
+from pptx.enum.shapes import MSO_SHAPE_TYPE, PP_PLACEHOLDER
 
 from app.core.errors import ApiError, ErrorCode
 from app.core.storage import template_manifest_path
-from app.models.api import FitLimits, LayoutInfo, PlaceholderInfo, SlotMap, TemplateManifest
+from app.models.api import (
+    FitLimits,
+    LayoutInfo,
+    PlaceholderInfo,
+    SlideAnalysisReport,
+    SlotMap,
+    TemplateManifest,
+    TemplateProfile,
+    TemplateSlot,
+)
 
 SLIDE_TYPES: list[str] = [
     "title",
@@ -342,6 +353,518 @@ def extract_palette(pptx_path: Path | str) -> dict[str, str]:
         return {}
 
 
+def relative_luminance(hex_str: str) -> float:
+    hex_str = hex_str.lstrip("#")
+    if len(hex_str) != 6:
+        return 0.5
+    r, g, b = [int(hex_str[i : i + 2], 16) / 255.0 for i in (0, 2, 4)]
+
+    def srgb_to_lin(c: float) -> float:
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
+    return 0.2126 * srgb_to_lin(r) + 0.7152 * srgb_to_lin(g) + 0.0722 * srgb_to_lin(b)
+
+
+def contrast_ratio(hex1: str, hex2: str) -> float:
+    l1 = relative_luminance(hex1)
+    l2 = relative_luminance(hex2)
+    lighter = max(l1, l2)
+    darker = min(l1, l2)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def ensure_contrast(text_hex: str, bg_hex: str, min_ratio: float = 4.5) -> str:
+    """Returns text_hex if contrast >= min_ratio, else pure black or pure white whichever has higher contrast."""
+    if contrast_ratio(text_hex, bg_hex) >= min_ratio:
+        return text_hex
+    c_white = contrast_ratio("#FFFFFF", bg_hex)
+    c_black = contrast_ratio("#0F172A", bg_hex)
+    return "#FFFFFF" if c_white >= c_black else "#0F172A"
+
+
+def hex_to_hsl(hex_code: str) -> tuple[float, float, float]:
+    hex_code = hex_code.lstrip("#")
+    r, g, b = [int(hex_code[i : i + 2], 16) / 255.0 for i in (0, 2, 4)]
+    h, l, s = colorsys.rgb_to_hls(r, g, b)
+    return h * 360.0, s, l
+
+
+def hsl_to_hex(h: float, s: float, l: float) -> str:
+    h_norm = (h % 360.0) / 360.0
+    r, g, b = colorsys.hls_to_rgb(h_norm, max(0.0, min(1.0, l)), max(0.0, min(1.0, s)))
+    return f"#{int(round(r * 255)):02X}{int(round(g * 255)):02X}{int(round(b * 255)):02X}"
+
+
+def hue_distance(h1: float, h2: float) -> float:
+    d = abs(h1 - h2) % 360.0
+    return 360.0 - d if d > 180.0 else d
+
+
+STOCK_OFFICE_ACCENTS: set[str] = {
+    "4F81BD", "C0504D", "9BBB59", "8064A2", "4BACC6", "F79646",
+    "5B9BD5", "ED7D31", "A5A5A5", "FFC000", "4472C4", "70AD47",
+}
+
+PRO_PALETTE: dict[str, str] = {
+    "primary": "#2563EB",
+    "secondary": "#0D9488",
+    "tertiary": "#D97706",
+    "quaternary": "#7C3AED",
+    "neutral": "#64748B",
+}
+
+
+def classify_slide_shapes(
+    slide: Any,
+    slide_width: int,
+    slide_height: int,
+    repeated_texts: set[str],
+) -> tuple[list[Any], list[Any]]:
+    """Deterministically classifies shapes on a slide into (static_shapes, fillable_shapes)."""
+    static_shapes: list[Any] = []
+    fillable_shapes: list[Any] = []
+    slide_area = slide_width * slide_height
+
+    for shape in slide.shapes:
+        # Pictures, groups, lines, connectors
+        if (
+            shape.shape_type
+            in (
+                MSO_SHAPE_TYPE.PICTURE,
+                MSO_SHAPE_TYPE.GROUP,
+                MSO_SHAPE_TYPE.LINE,
+            )
+            or hasattr(shape, "image")
+        ):
+            static_shapes.append(shape)
+            continue
+
+        # Placeholders
+        if shape.is_placeholder:
+            p_type = shape.placeholder_format.type
+            if p_type in (
+                PP_PLACEHOLDER.FOOTER,
+                PP_PLACEHOLDER.SLIDE_NUMBER,
+                PP_PLACEHOLDER.DATE,
+            ):
+                static_shapes.append(shape)
+                continue
+            elif p_type in (
+                PP_PLACEHOLDER.BODY,
+                PP_PLACEHOLDER.OBJECT,
+                PP_PLACEHOLDER.TABLE,
+                PP_PLACEHOLDER.CHART,
+                PP_PLACEHOLDER.PICTURE,
+            ):
+                fillable_shapes.append(shape)
+                continue
+            elif p_type in (PP_PLACEHOLDER.TITLE, PP_PLACEHOLDER.CENTER_TITLE):
+                t = shape.text_frame.text.strip() if shape.has_text_frame else ""
+                t_lower = t.lower()
+                if not t or t_lower in ("click to add title", "title", "presentation title"):
+                    fillable_shapes.append(shape)
+                else:
+                    static_shapes.append(shape)
+                continue
+
+        # Non-placeholders with text
+        if shape.has_text_frame:
+            t = shape.text_frame.text.strip()
+            t_lower = t.lower()
+
+            # Text repeated on 2+ slides -> STATIC
+            if t_lower and t_lower in repeated_texts:
+                static_shapes.append(shape)
+                continue
+
+            # Short labels (<= 40 chars) -> STATIC
+            if len(t) <= 40:
+                static_shapes.append(shape)
+                continue
+
+            # All-caps headers -> STATIC
+            if t.isupper() and len(t) <= 60:
+                static_shapes.append(shape)
+                continue
+
+            # Fillable criteria: > 12% slide area, > 120 chars, or bullet chars
+            area = shape.width * shape.height
+            has_bullets = any(c in t for c in ("•", "–", "-", "*", "\u2022", "\u25cf", "\u25aa"))
+            if (area / slide_area > 0.12) or len(t) > 120 or has_bullets:
+                fillable_shapes.append(shape)
+                continue
+
+            # Fallback
+            static_shapes.append(shape)
+        else:
+            static_shapes.append(shape)
+
+    return static_shapes, fillable_shapes
+
+
+def compute_free_box(
+    slide: Any,
+    slide_width: int,
+    slide_height: int,
+    static_shapes: list[Any],
+    fillable_shapes: list[Any],
+) -> tuple[int, int, int, int]:
+    """Computes the largest rectangle free of static shapes, expanded from the fillable shapes' union."""
+    margin_x = int(0.04 * slide_width)
+    margin_y = int(0.04 * slide_height)
+    slide_area = slide_width * slide_height
+
+    # Exclude full-slide background rects (> 70% slide area)
+    non_bg_static = [
+        s
+        for s in static_shapes
+        if not (
+            s.width * s.height > 0.7 * slide_area
+            and s.left <= 0.1 * slide_width
+            and s.top <= 0.1 * slide_height
+        )
+    ]
+
+    if fillable_shapes:
+        min_l = min(s.left for s in fillable_shapes)
+        min_t = min(s.top for s in fillable_shapes)
+        max_r = max(s.left + s.width for s in fillable_shapes)
+        max_b = max(s.top + s.height for s in fillable_shapes)
+    else:
+        min_l = margin_x
+        min_t = int(0.18 * slide_height)
+        max_r = slide_width - margin_x
+        max_b = int(0.90 * slide_height)
+
+    # Top boundary from upper static shapes
+    top_shapes = [
+        s.top + s.height
+        for s in non_bg_static
+        if s.top < 0.25 * slide_height and (s.left < max_r and s.left + s.width > min_l)
+    ]
+    effective_top = max(top_shapes) if top_shapes else margin_y
+    if min_t < effective_top:
+        min_t = effective_top + int(0.01 * slide_height)
+
+    # Bottom boundary from lower static shapes
+    bottom_shapes = [
+        s.top
+        for s in non_bg_static
+        if s.top > 0.70 * slide_height and (s.left < max_r and s.left + s.width > min_l)
+    ]
+    effective_bottom = min(bottom_shapes) if bottom_shapes else (slide_height - margin_y)
+    if max_b > effective_bottom:
+        max_b = effective_bottom - int(0.01 * slide_height)
+
+    box_l = max(margin_x, min_l)
+    box_t = max(margin_y, min_t)
+    box_w = max(int(0.2 * slide_width), max_r - box_l)
+    box_h = max(int(0.2 * slide_height), max_b - box_t)
+
+    if box_l + box_w > slide_width - margin_x:
+        box_w = max(int(0.2 * slide_width), slide_width - margin_x - box_l)
+    if box_t + box_h > slide_height - margin_y:
+        box_h = max(int(0.2 * slide_height), slide_height - margin_y - box_t)
+
+    return (int(box_l), int(box_t), int(box_w), int(box_h))
+
+
+def extract_slot_info(
+    slide: Any, slide_index: int, fillable_shapes: list[Any]
+) -> tuple[str, str]:
+    """Extracts slot_title and hint from a template slide."""
+    slot_title = ""
+    for shape in slide.shapes:
+        if shape.is_placeholder and shape.placeholder_format.type in (
+            PP_PLACEHOLDER.TITLE,
+            PP_PLACEHOLDER.CENTER_TITLE,
+        ):
+            if shape.has_text_frame and shape.text_frame.text.strip():
+                t = shape.text_frame.text.strip()
+                if t.lower() not in ("click to add title", "title", "presentation title"):
+                    slot_title = t
+                    break
+
+    if not slot_title:
+        text_shapes = [
+            s for s in slide.shapes if s.has_text_frame and s.text_frame.text.strip()
+        ]
+        if text_shapes:
+            text_shapes.sort(key=lambda s: (s.top, -s.width))
+            slot_title = text_shapes[0].text_frame.text.strip().split("\n")[0][:60]
+
+    if not slot_title:
+        slot_title = f"Slide {slide_index + 1}"
+
+    slot_title = re.sub(r"[\x00-\x1f\x7f-\x9f]", " ", slot_title).strip()
+
+    hint = ""
+    for f in fillable_shapes:
+        if f.has_text_frame and f.text_frame.text.strip():
+            hint = f.text_frame.text.strip().replace("\n", " ")[:150]
+            break
+
+    return slot_title, hint
+
+
+_PROFILE_CACHE: dict[str, TemplateProfile] = {}
+
+
+def _do_analyze_template(pptx_path: Path | str) -> TemplateProfile:
+    path = Path(pptx_path)
+    prs = Presentation(str(path))
+    slide_w = int(prs.slide_width)
+    slide_h = int(prs.slide_height)
+    scale = slide_h / 6858000.0
+
+    # 1. Read Theme Part
+    theme_name = ""
+    dk1 = "#1E293B"
+    lt1 = "#FFFFFF"
+    dk2 = "#0F172A"
+    lt2 = "#F8FAFC"
+    accent1 = "#3B82F6"
+    accent2 = "#10B981"
+    accent3 = "#F59E0B"
+    accent4 = "#EF4444"
+    accent5 = "#8B5CF6"
+    accent6 = "#06B6D4"
+    major_font = "Calibri"
+    minor_font = "Calibri"
+
+    try:
+        if prs.slide_masters:
+            master = prs.slide_masters[0]
+            theme_part = None
+            for rel in master.part.rels.values():
+                if "theme" in rel.reltype:
+                    theme_part = rel.target_part
+                    break
+            if theme_part is not None:
+                root = ET.fromstring(theme_part.blob)
+                clr_scheme = None
+                for elem in root.iter():
+                    if elem.tag.endswith("clrScheme"):
+                        clr_scheme = elem
+                        theme_name = clr_scheme.get("name", "")
+                    elif elem.tag.endswith("majorFont"):
+                        for sub in elem:
+                            if sub.tag.endswith("latin") and sub.get("typeface"):
+                                major_font = sub.get("typeface")
+                    elif elem.tag.endswith("minorFont"):
+                        for sub in elem:
+                            if sub.tag.endswith("latin") and sub.get("typeface"):
+                                minor_font = sub.get("typeface")
+
+                if clr_scheme is not None:
+                    scheme_tags = {
+                        "dk1": "dk1",
+                        "lt1": "lt1",
+                        "dk2": "dk2",
+                        "lt2": "lt2",
+                        "accent1": "accent1",
+                        "accent2": "accent2",
+                        "accent3": "accent3",
+                        "accent4": "accent4",
+                        "accent5": "accent5",
+                        "accent6": "accent6",
+                    }
+                    extracted_colors: dict[str, str] = {}
+                    for child in clr_scheme:
+                        tag_name = child.tag.split("}")[-1]
+                        if tag_name in scheme_tags:
+                            h_val = None
+                            for sub in child:
+                                sub_tag = sub.tag.split("}")[-1]
+                                if sub_tag == "srgbClr":
+                                    h_val = sub.get("val")
+                                    break
+                                elif sub_tag == "sysClr":
+                                    h_val = sub.get("lastClr")
+                                    break
+                            if h_val:
+                                h_val = h_val.strip().lstrip("#")
+                                if len(h_val) == 6:
+                                    extracted_colors[tag_name] = f"#{h_val.upper()}"
+
+                    dk1 = extracted_colors.get("dk1", dk1)
+                    lt1 = extracted_colors.get("lt1", lt1)
+                    dk2 = extracted_colors.get("dk2", dk2)
+                    lt2 = extracted_colors.get("lt2", lt2)
+                    accent1 = extracted_colors.get("accent1", accent1)
+                    accent2 = extracted_colors.get("accent2", accent2)
+                    accent3 = extracted_colors.get("accent3", accent3)
+                    accent4 = extracted_colors.get("accent4", accent4)
+                    accent5 = extracted_colors.get("accent5", accent5)
+                    accent6 = extracted_colors.get("accent6", accent6)
+    except Exception:
+        pass
+
+    # 2. Background Luminance
+    bg_lum: Literal["dark", "light"] = "light"
+    try:
+        if prs.slide_masters:
+            master = prs.slide_masters[0]
+            bg = master.background
+            if (
+                bg
+                and bg.fill
+                and hasattr(bg.fill, "fore_color")
+                and hasattr(bg.fill.fore_color, "rgb")
+            ):
+                rgb = bg.fill.fore_color.rgb
+                hex_c = f"#{rgb[0]:02X}{rgb[1]:02X}{rgb[2]:02X}"
+                bg_lum = "dark" if relative_luminance(hex_c) < 0.5 else "light"
+            elif relative_luminance(lt1) < 0.5:
+                bg_lum = "dark"
+    except Exception:
+        pass
+
+    # 3. Palette Policy
+    raw_accents = [accent1, accent2, accent3, accent4, accent5, accent6]
+    is_stock_office = (
+        "office" in theme_name.lower()
+        or any(a.lstrip("#").upper() in STOCK_OFFICE_ACCENTS for a in raw_accents[:3])
+    )
+
+    if is_stock_office:
+        primary = PRO_PALETTE["primary"]
+        secondary = PRO_PALETTE["secondary"]
+        tertiary = PRO_PALETTE["tertiary"]
+        quaternary = PRO_PALETTE["quaternary"]
+        neutral = PRO_PALETTE["neutral"]
+    else:
+        # Check distinguishable accents by hue distance
+        hues = [hex_to_hsl(a)[0] for a in raw_accents]
+        distinct_accents: list[str] = [raw_accents[0]]
+        for a, h in zip(raw_accents[1:], hues[1:], strict=False):
+            if all(hue_distance(h, hex_to_hsl(da)[0]) >= 25.0 for da in distinct_accents):
+                distinct_accents.append(a)
+
+        if len(distinct_accents) < 4:
+            # Monochrome palette: synthesize missing accents by rotating accent1 hue (+35, +70, +140, +210, +280)
+            h1, s1, l1 = hex_to_hsl(accent1)
+            s1 = max(0.4, min(0.9, s1))
+            l1 = max(0.35, min(0.65, l1))
+            synthesized = [accent1]
+            for deg in (35.0, 70.0, 140.0, 210.0, 280.0):
+                synthesized.append(hsl_to_hex(h1 + deg, s1, l1))
+            distinct_accents = synthesized
+
+        target_bg = lt1 if bg_lum == "light" else dk1
+
+        def adjust_contrast(c_hex: str) -> str:
+            h, s, l = hex_to_hsl(c_hex)
+            if bg_lum == "light":
+                while contrast_ratio(hsl_to_hex(h, s, l), target_bg) < 3.0 and l > 0.15:
+                    l -= 0.05
+            else:
+                while contrast_ratio(hsl_to_hex(h, s, l), target_bg) < 3.0 and l < 0.85:
+                    l += 0.05
+            return hsl_to_hex(h, s, l)
+
+        adjusted_accents = [adjust_contrast(a) for a in distinct_accents]
+        primary = adjusted_accents[0]
+        secondary = adjusted_accents[1] if len(adjusted_accents) > 1 else PRO_PALETTE["secondary"]
+        tertiary = adjusted_accents[2] if len(adjusted_accents) > 2 else PRO_PALETTE["tertiary"]
+        quaternary = adjusted_accents[3] if len(adjusted_accents) > 3 else PRO_PALETTE["quaternary"]
+        neutral = dk2 if bg_lum == "light" else lt2
+
+    # 4. Slide Classification & Slots
+    repeated_texts: set[str] = set()
+    text_counts: dict[str, int] = {}
+    for sld in prs.slides:
+        for shp in sld.shapes:
+            if shp.has_text_frame:
+                t = shp.text_frame.text.strip().lower()
+                if t:
+                    text_counts[t] = text_counts.get(t, 0) + 1
+    repeated_texts = {t for t, count in text_counts.items() if count >= 2}
+
+    slots: list[TemplateSlot] = []
+    analysis_reports: list[SlideAnalysisReport] = []
+    fillable_slide_count = 0
+
+    for idx, sld in enumerate(prs.slides):
+        stat_shapes, fill_shapes = classify_slide_shapes(
+            sld, slide_w, slide_h, repeated_texts
+        )
+        if len(fill_shapes) > 0:
+            fillable_slide_count += 1
+
+        fbox = compute_free_box(sld, slide_w, slide_h, stat_shapes, fill_shapes)
+        slot_title, hint = extract_slot_info(sld, idx, fill_shapes)
+
+        slots.append(TemplateSlot(slot_index=idx, slot_title=slot_title, hint=hint))
+        analysis_reports.append(
+            SlideAnalysisReport(
+                slide_index=idx,
+                static_count=len(stat_shapes),
+                fillable_count=len(fill_shapes),
+                free_box=fbox,
+                title=slot_title,
+            )
+        )
+
+    # 5. Determine Mode
+    is_default_stock = (
+        path.name.lower() in ("default.pptx", "tmpl_1.pptx", "default_tmpl.pptx")
+        or "default" in path.stem.lower()
+    )
+    if is_default_stock:
+        mode: Literal["fill", "layouts"] = "layouts"
+    else:
+        mode = "fill" if fillable_slide_count >= 3 else "layouts"
+
+    return TemplateProfile(
+        slide_width=slide_w,
+        slide_height=slide_h,
+        scale=scale,
+        mode=mode,
+        background_luminance=bg_lum,
+        theme_name=theme_name,
+        dk1=dk1,
+        lt1=lt1,
+        dk2=dk2,
+        lt2=lt2,
+        accent1=accent1,
+        accent2=accent2,
+        accent3=accent3,
+        accent4=accent4,
+        accent5=accent5,
+        accent6=accent6,
+        major_font=major_font or "Calibri",
+        minor_font=minor_font or "Calibri",
+        primary=primary,
+        secondary=secondary,
+        tertiary=tertiary,
+        quaternary=quaternary,
+        neutral=neutral,
+        corner_radius_ratio=0.025,
+        padding_ratio=0.015,
+        gap_ratio=0.018,
+        base_body_size_pt=12.0 * scale,
+        min_body_size_pt=9.0 * scale,
+        slots=slots,
+        analysis_reports=analysis_reports,
+    )
+
+
+def analyze_template(pptx_path: Path | str) -> TemplateProfile:
+    path = Path(pptx_path)
+    try:
+        cache_key = f"{path.resolve()}:{path.stat().st_mtime}" if path.exists() else str(pptx_path)
+    except Exception:
+        cache_key = str(pptx_path)
+
+    if cache_key in _PROFILE_CACHE:
+        return _PROFILE_CACHE[cache_key]
+
+    profile = _do_analyze_template(path)
+    _PROFILE_CACHE[cache_key] = profile
+    return profile
+
+
 def inspect_template(pptx_path: Path, template_id: str, name: str) -> TemplateManifest:
     path = Path(pptx_path)
     if not path.exists():
@@ -418,6 +941,14 @@ def inspect_template(pptx_path: Path, template_id: str, name: str) -> TemplateMa
     slide_height = int(prs.slide_height)
     palette = extract_palette(path)
 
+    profile = analyze_template(path)
+    for rep in profile.analysis_reports:
+        warnings.append(
+            f"Slide {rep.slide_index + 1}: {rep.static_count} static shapes (preserved), "
+            f"{rep.fillable_count} fillable shapes (replaced), "
+            f"free box ({rep.free_box[0]}, {rep.free_box[1]}, {rep.free_box[2]}, {rep.free_box[3]})"
+        )
+
     return TemplateManifest(
         template_id=template_id,
         name=name,
@@ -429,6 +960,8 @@ def inspect_template(pptx_path: Path, template_id: str, name: str) -> TemplateMa
         limits=limits,
         palette=palette if palette else None,
         warnings=warnings,
+        mode=profile.mode,
+        profile=profile,
     )
 
 
@@ -439,6 +972,8 @@ def rebuild_manifest(
     slots, limits, warnings, final_layout_map = _compute_slots_and_limits(
         manifest.layouts, target_layout_map
     )
+    profile = getattr(manifest, "profile", None)
+    mode = getattr(manifest, "mode", profile.mode if profile else "layouts")
     return TemplateManifest(
         template_id=manifest.template_id,
         name=manifest.name,
@@ -450,6 +985,8 @@ def rebuild_manifest(
         limits=limits,
         palette=manifest.palette,
         warnings=warnings,
+        mode=mode,
+        profile=profile,
     )
 
 
@@ -533,4 +1070,39 @@ def resolve_picture_target(
         height=manifest.slide_height - 2 * margin_y,
         shrink_body=False,
     )
+
+
+def set_template(deck: Any, new_manifest: TemplateManifest) -> Any:
+    """SetTemplate re-renders the SAME Deck with the new template's profile and mode.
+    If the new template is in fill mode and the deck has a different slot count,
+    reject with 'Template has N slots, deck has M slides' and offer layouts mode.
+    Content and slide count are never altered to fit a template.
+    Does NOT call enforce_fit or any LLM.
+    """
+    mode = getattr(new_manifest, "mode", "layouts")
+    if mode == "fill" and new_manifest.profile and len(new_manifest.profile.slots) > 0:
+        slot_count = len(new_manifest.profile.slots)
+        deck_count = len(deck.slides)
+        if slot_count != deck_count:
+            raise ApiError(
+                ErrorCode.TEMPLATE_INVALID,
+                f"Template has {slot_count} slots, deck has {deck_count} slides",
+            )
+
+    new_deck = deck.model_copy(deep=True)
+    new_deck.template_id = new_manifest.template_id
+    return new_deck
+
+
+def set_theme(deck: Any, theme: str, variant: str | None = None) -> Any:
+    """SetTheme switches theme/variant without mutating Deck text."""
+    new_deck = deck.model_copy(deep=True)
+    new_deck.theme = theme
+    if variant is not None:
+        new_deck.variant = variant
+    return new_deck
+
+
+SetTemplate = set_template
+SetTheme = set_theme
 

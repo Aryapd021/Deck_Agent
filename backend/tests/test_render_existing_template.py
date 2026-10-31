@@ -39,8 +39,8 @@ def test_render_with_pre_existing_template_slides(tmp_path: Path):
     assert out_pptx.exists()
     prs = Presentation(str(out_pptx))
 
-    # The 7-slide template should have its 7th instruction slide removed -> 6 slides
-    assert len(prs.slides) == 6
+    # Invariant I1: Fill mode -> pptx slides == template slide count (7 slides)
+    assert len(prs.slides) == 7
 
     # Slide 1: Title & Subtitle
     s1 = prs.slides[0]
@@ -56,12 +56,12 @@ def test_render_with_pre_existing_template_slides(tmp_path: Path):
     pics = [s for s in s3.shapes if s.shape_type == MSO_SHAPE_TYPE.PICTURE]
     assert len(pics) >= 1, "Technical approach slide should contain diagram picture"
 
-    # Slide 2 to 6: Body content should be populated with bullets
+    # Slide 2 to 6: Body content should be populated with bullets/cards
     for s_idx in range(1, 6):
         slide = prs.slides[s_idx]
-        has_bullets = any(
-            "•" in s.text_frame.text or len(s.text_frame.paragraphs) > 1
+        has_content = any(
+            len(s.text_frame.text.strip()) > 20
             for s in slide.shapes
             if s.has_text_frame
         )
-        assert has_bullets, f"Slide {s_idx+1} should have populated body bullets"
+        assert has_content, f"Slide {s_idx+1} should have populated body bullets"

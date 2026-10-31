@@ -54,6 +54,7 @@ class Slide(BaseModel):
     image_ref: str | None = None
     notes: str = ""
     flagged: bool = False
+    slot_index: int | None = None
 
     @field_validator("bullets")
     @classmethod
@@ -64,12 +65,15 @@ class Slide(BaseModel):
 
 
 class Deck(BaseModel):
-    schema_version: int = 1
+    schema_version: int = 2
     project_id: str
     version: int
     template_id: str
     slides: list[Slide]
     diagram: "ComponentGraph | None" = None
+    theme: str | None = None
+    variant: str | None = None
+    diagram_style: str | None = None
 
 
 class DeckDraft(BaseModel):

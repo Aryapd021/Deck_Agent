@@ -19,6 +19,11 @@ You are an expert pitch deck designer. Your task is to produce a draft presentat
 - `notes`: 1 to 3 sentences of speaker notes (<= 600 characters) that add context and invent no new facts.
 - Slide `id`s may be any temporary string (they will be deterministically replaced with UUIDs).
 
+### Fill Mode (when slots are provided):
+- If <slots> are provided below, generate EXACTLY one slide per slot, in the exact order of the slots.
+- For slot i, set `slot_index` to i, use the slot's title as the slide title, and tailor content to the slot's title and hint.
+- Never add, omit, merge, split, or rename slots when slots are provided. Slide count must equal the slot count.
+
 ### Data Delimiters:
 <facts>
 {{facts}}
@@ -31,3 +36,8 @@ You are an expert pitch deck designer. Your task is to produce a draft presentat
 <max_slides>
 {{max_slides}}
 </max_slides>
+
+<slots>
+{{slots}}
+</slots>
+

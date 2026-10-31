@@ -117,6 +117,8 @@ def load_prompt(name: str, /, **vars: Any) -> str:
         raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
 
     content = prompt_path.read_text(encoding="utf-8")
+    if name == "deck" and "slots" not in vars:
+        vars["slots"] = ""
     for key, value in vars.items():
         content = content.replace(f"{{{{{key}}}}}", str(value))
 

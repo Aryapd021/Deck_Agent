@@ -68,25 +68,71 @@ async def build_deck(
     version: int,
 ) -> Deck:
     settings = get_settings()
-    max_slides = settings.max_slides
     capabilities = manifest_capabilities(manifest)
+
+    mode = getattr(manifest, "mode", "layouts")
+    is_fill_mode = bool(
+        mode == "fill" and manifest.profile and len(manifest.profile.slots) > 0
+    )
+
+    slots_str = ""
+    if is_fill_mode and manifest.profile:
+        slots_data = [
+            {"slot_index": s.slot_index, "slot_title": s.slot_title, "hint": s.hint}
+            for s in manifest.profile.slots
+        ]
+        slots_str = json.dumps(slots_data, indent=2)
+        effective_max_slides = len(manifest.profile.slots)
+    else:
+        effective_max_slides = settings.max_slides
 
     prompt = load_prompt(
         "deck",
         facts=facts.model_dump_json(),
         capabilities=json.dumps(capabilities, indent=2),
-        max_slides=str(max_slides),
+        max_slides=str(effective_max_slides),
+        slots=slots_str,
     )
     draft = await generate_structured(prompt, DeckDraft)
 
-    # Determine expected slide types based on max_slides and DROP_ORDER
+    if is_fill_mode and manifest.profile:
+        slot_count = len(manifest.profile.slots)
+        final_slides = []
+        for i, s in enumerate(draft.slides):
+            s.id = uuid4().hex
+            s.slot_index = i
+            t_lower = s.title.text.lower()
+            if (
+                "approach" in t_lower
+                or "architecture" in t_lower
+                or "technical" in t_lower
+                or s.type == SlideType.ARCHITECTURE
+            ):
+                s.image_ref = "diagram"
+            else:
+                s.image_ref = None
+            final_slides.append(s)
+
+        if len(final_slides) > slot_count:
+            final_slides = final_slides[:slot_count]
+
+        return Deck(
+            schema_version=2,
+            project_id=project_id,
+            version=version,
+            template_id=manifest.template_id,
+            slides=final_slides,
+            diagram=facts.components,
+        )
+
+    # Layouts mode: determine expected slide types based on max_slides and DROP_ORDER
     expected_types = list(CANONICAL_ORDER)
     for drop_type in DROP_ORDER:
-        if len(expected_types) <= max_slides:
+        if len(expected_types) <= effective_max_slides:
             break
         expected_types.remove(drop_type)
-    if len(expected_types) > max_slides:
-        expected_types = expected_types[:max_slides]
+    if len(expected_types) > effective_max_slides:
+        expected_types = expected_types[:effective_max_slides]
 
     draft_types = {s.type for s in draft.slides}
     missing_types = [st for st in expected_types if st not in draft_types]
@@ -97,7 +143,6 @@ async def build_deck(
             detail={"missing_types": [st.value for st in missing_types]},
         )
 
-    # Dedup duplicate types (keep first) and filter to expected types
     seen_types = set()
     filtered_slides = []
     for s in draft.slides:
@@ -111,7 +156,7 @@ async def build_deck(
     final_slides = sorted(filtered_slides, key=lambda s: order_map[s.type])
 
     return Deck(
-        schema_version=1,
+        schema_version=2,
         project_id=project_id,
         version=version,
         template_id=manifest.template_id,

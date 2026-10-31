@@ -151,6 +151,66 @@ class FitLimits(BaseModel):
     notes_max: int = 600
 
 
+class TemplateSlot(BaseModel):
+    slot_index: int
+    slot_title: str
+    hint: str = ""
+
+
+class SlideAnalysisReport(BaseModel):
+    slide_index: int
+    static_count: int
+    fillable_count: int
+    free_box: tuple[int, int, int, int] | None = None
+
+
+class TemplateProfile(BaseModel):
+    slide_width: int
+    slide_height: int
+    scale: float = 1.0
+    aspect_ratio: str = "16:9"
+    dk1: str = "000000"
+    lt1: str = "FFFFFF"
+    dk2: str = "1F2937"
+    lt2: str = "F6F7F9"
+    accent1: str = "006FC0"
+    accent2: str = "6B4FA0"
+    accent3: str = "1A9C8F"
+    accent4: str = "F28C28"
+    accent5: str = "2E9E5B"
+    accent6: str = "D9A441"
+    major_font: str = "Calibri"
+    minor_font: str = "Calibri"
+    background: Literal["dark", "light"] = "light"
+    background_luminance: Literal["dark", "light"] = "light"
+    theme_name: str = ""
+    role_primary: str = "006FC0"
+    role_secondary: str = "6B4FA0"
+    role_tertiary: str = "1A9C8F"
+    role_quaternary: str = "F28C28"
+    role_neutral: str = "6B7280"
+    primary: str = "006FC0"
+    secondary: str = "6B4FA0"
+    tertiary: str = "1A9C8F"
+    quaternary: str = "F28C28"
+    neutral: str = "6B7280"
+    accents: list[str] = PydField(
+        default_factory=lambda: ["006FC0", "6B4FA0", "1A9C8F", "F28C28", "2E9E5B", "D9A441"]
+    )
+    panels: list[str] = PydField(
+        default_factory=lambda: ["ECF3FB", "F5F4FA", "E8F5EE", "FDF1E3", "F6F7F9"]
+    )
+    corner_radius_ratio: float = 0.025
+    padding_ratio: float = 0.015
+    gap_ratio: float = 0.018
+    base_body_size_pt: float = 12.0
+    min_body_size_pt: float = 9.0
+    mode: Literal["fill", "layouts"] = "layouts"
+    slots: list[TemplateSlot] = PydField(default_factory=list)
+    slide_reports: list[SlideAnalysisReport] = PydField(default_factory=list)
+    analysis_reports: list[SlideAnalysisReport] = PydField(default_factory=list)
+
+
 class TemplateManifest(BaseModel):
     template_id: str
     name: str
@@ -162,6 +222,8 @@ class TemplateManifest(BaseModel):
     limits: dict[str, FitLimits]
     palette: dict[str, str] | None = None
     warnings: list[str] = PydField(default_factory=list)
+    mode: Literal["fill", "layouts"] = "layouts"
+    profile: TemplateProfile | None = None
 
 
 class TemplateOut(BaseModel):
@@ -172,3 +234,17 @@ class TemplateOut(BaseModel):
 
 class LayoutMapUpdate(BaseModel):
     layout_map: dict[str, int]
+
+
+class TemplateModeUpdate(BaseModel):
+    mode: Literal["fill", "layouts"]
+
+
+class SetTemplateRequest(BaseModel):
+    template_id: str
+    mode: Literal["fill", "layouts"] | None = None
+
+
+class SetThemeRequest(BaseModel):
+    theme: str
+    variant: str | None = None

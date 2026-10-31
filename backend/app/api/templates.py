@@ -9,7 +9,7 @@ from app.config import get_settings
 from app.core.errors import ApiError, ErrorCode
 from app.core.storage import template_pptx_path
 from app.db import get_session
-from app.models.api import LayoutMapUpdate, TemplateManifest, TemplateOut
+from app.models.api import LayoutMapUpdate, TemplateManifest, TemplateModeUpdate, TemplateOut
 from app.models.deck import SlideType
 from app.models.tables import TemplateRow
 from app.services.template_inspector import (
@@ -138,3 +138,31 @@ async def update_layout_map(
     session.refresh(template_row)
 
     return TemplateOut(id=template_row.id, name=template_row.name, manifest=rebuilt)
+
+
+@router.put("/templates/{id}/mode", response_model=TemplateOut)
+async def update_template_mode(
+    id: str,
+    update: TemplateModeUpdate,
+    session: Session = Depends(get_session),
+) -> TemplateOut:
+    template_row = session.get(TemplateRow, id)
+    if not template_row:
+        raise ApiError(ErrorCode.NOT_FOUND, f"Template not found: {id}")
+
+    try:
+        manifest = TemplateManifest.model_validate_json(template_row.manifest_json)
+    except Exception:
+        manifest = load_manifest(id)
+
+    if manifest.profile:
+        manifest.profile.mode = update.mode
+    save_manifest(manifest)
+
+    template_row.manifest_json = manifest.model_dump_json()
+    session.add(template_row)
+    session.commit()
+    session.refresh(template_row)
+
+    return TemplateOut(id=template_row.id, name=template_row.name, manifest=manifest)
+

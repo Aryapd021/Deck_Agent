@@ -13,7 +13,9 @@ from app.core.jobs import (
     run_generate,
     start_job,
     try_acquire,
+    commit_version,
 )
+from app.core.storage import copy_version_dir, new_temp_version_dir, template_pptx_path
 from app.db import get_session
 from app.models.api import (
     CreateProjectRequest,
@@ -22,9 +24,18 @@ from app.models.api import (
     InputsRequest,
     JobAccepted,
     ProjectOut,
+    SetTemplateRequest,
+    SetThemeRequest,
+    TemplateManifest,
+    VersionInfo,
 )
+from app.models.deck import Deck
 from app.models.tables import DeckVersionRow, ProjectInputRow, ProjectRow, TemplateRow
 from app.services.chat_digest import redact
+from app.services.preview import generate_previews
+from app.services.render import render_deck
+from app.services.template_inspector import set_template, set_theme
+import asyncio
 
 router = APIRouter(tags=["projects"])
 
@@ -157,3 +168,146 @@ async def edit_deck(
         raise
 
     return JobAccepted(job_id=job_id)
+
+
+@router.put("/projects/{id}/template", response_model=VersionInfo)
+async def update_project_template(
+    id: str,
+    req: SetTemplateRequest,
+    session: Session = Depends(get_session),
+) -> VersionInfo:
+    project = session.get(ProjectRow, id)
+    if not project:
+        raise ApiError(ErrorCode.NOT_FOUND, f"Project {id} not found")
+
+    new_tmpl = session.get(TemplateRow, req.template_id)
+    if not new_tmpl:
+        raise ApiError(ErrorCode.NOT_FOUND, f"Template {req.template_id} not found")
+
+    manifest = TemplateManifest.model_validate_json(new_tmpl.manifest_json)
+    if req.mode is not None:
+        manifest.mode = req.mode
+        if manifest.profile:
+            manifest.profile.mode = req.mode
+
+    # Acquire project lock
+    await try_acquire(id)
+    try:
+        stmt = (
+            select(DeckVersionRow)
+            .where(DeckVersionRow.project_id == id)
+            .order_by(DeckVersionRow.version.desc())
+        )
+        latest_row = session.exec(stmt).first()
+        if not latest_row:
+            raise ApiError(ErrorCode.NOT_FOUND, f"Project {id} has no deck versions")
+
+        current = latest_row.version
+        deck = Deck.model_validate_json(latest_row.deck_json)
+
+        # set_template validates slots and keeps all text byte-identical (no enforce_fit, no LLM)
+        new_deck = set_template(deck, manifest)
+        new_version = current + 1
+        new_deck.version = new_version
+
+        project.template_id = req.template_id
+        session.add(project)
+        session.commit()
+
+        tmp_dir = new_temp_version_dir(id, new_version)
+        await asyncio.to_thread(copy_version_dir, id, current, tmp_dir)
+        tmpl_path = template_pptx_path(req.template_id)
+        out_pptx = tmp_dir / "deck.pptx"
+        diagram_png = tmp_dir / "diagram.png"
+
+        await asyncio.to_thread(
+            render_deck,
+            new_deck,
+            manifest,
+            tmpl_path,
+            out_pptx,
+            diagram_png if diagram_png.exists() else None,
+        )
+
+        try:
+            await asyncio.to_thread(generate_previews, out_pptx, tmp_dir)
+        except Exception:
+            pass
+
+        return await commit_version(
+            project_id=id,
+            version=new_version,
+            deck=new_deck,
+            created_by="manual",
+            summary=f"Switched template to {manifest.name or req.template_id}",
+            tmp_dir=tmp_dir,
+            facts=None,
+        )
+    finally:
+        release(id)
+
+
+@router.put("/projects/{id}/theme", response_model=VersionInfo)
+async def update_project_theme(
+    id: str,
+    req: SetThemeRequest,
+    session: Session = Depends(get_session),
+) -> VersionInfo:
+    project = session.get(ProjectRow, id)
+    if not project:
+        raise ApiError(ErrorCode.NOT_FOUND, f"Project {id} not found")
+
+    template = session.get(TemplateRow, project.template_id)
+    if not template:
+        raise ApiError(ErrorCode.NOT_FOUND, f"Template {project.template_id} not found")
+    manifest = TemplateManifest.model_validate_json(template.manifest_json)
+
+    await try_acquire(id)
+    try:
+        stmt = (
+            select(DeckVersionRow)
+            .where(DeckVersionRow.project_id == id)
+            .order_by(DeckVersionRow.version.desc())
+        )
+        latest_row = session.exec(stmt).first()
+        if not latest_row:
+            raise ApiError(ErrorCode.NOT_FOUND, f"Project {id} has no deck versions")
+
+        current = latest_row.version
+        deck = Deck.model_validate_json(latest_row.deck_json)
+
+        new_deck = set_theme(deck, req.theme, req.variant)
+        new_version = current + 1
+        new_deck.version = new_version
+
+        tmp_dir = new_temp_version_dir(id, new_version)
+        await asyncio.to_thread(copy_version_dir, id, current, tmp_dir)
+        tmpl_path = template_pptx_path(project.template_id)
+        out_pptx = tmp_dir / "deck.pptx"
+        diagram_png = tmp_dir / "diagram.png"
+
+        await asyncio.to_thread(
+            render_deck,
+            new_deck,
+            manifest,
+            tmpl_path,
+            out_pptx,
+            diagram_png if diagram_png.exists() else None,
+        )
+
+        try:
+            await asyncio.to_thread(generate_previews, out_pptx, tmp_dir)
+        except Exception:
+            pass
+
+        return await commit_version(
+            project_id=id,
+            version=new_version,
+            deck=new_deck,
+            created_by="manual",
+            summary=f"Changed theme to {req.theme}",
+            tmp_dir=tmp_dir,
+            facts=None,
+        )
+    finally:
+        release(id)
