@@ -76,6 +76,13 @@ class Settings(BaseSettings):
 
     @property
     def templates_dir(self) -> Path:
+        # On serverless runtimes always use the writable tmp path for uploaded templates.
+        if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+            writable = self.storage_dir / "templates"
+            writable.mkdir(parents=True, exist_ok=True)
+            return writable
+
+        # Local dev: prefer storage/templates (writable), then repo templates (for bundled files)
         writable_tmpl = self.storage_dir / "templates"
         if writable_tmpl.exists():
             return writable_tmpl

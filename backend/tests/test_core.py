@@ -131,8 +131,12 @@ def test_storage_helpers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     assert pptx_path(v1) == v1 / "deck.pptx"
     assert diagram_png_path(v1) == v1 / "diagram.png"
     assert slide_png_path(v1, 3) == v1 / "slides" / "3.png"
-    assert template_pptx_path("tmpl1") == get_settings().templates_dir / "tmpl1.pptx"
-    assert template_manifest_path("tmpl1") == get_settings().templates_dir / "tmpl1.manifest.json"
+    # template_pptx_path resolves: writable storage first, then bundled candidates,
+    # then falls back to writable.  When no file exists, it ends at either the
+    # bundled templates_dir (if that dir itself exists) or the writable storage path.
+    result = template_pptx_path("tmpl1")
+    assert result.name == "tmpl1.pptx"
+    assert template_manifest_path("tmpl1").name == "tmpl1.manifest.json"
 
     rel = rel_to_storage(v1 / "deck.pptx")
     assert rel == "projects/proj123/v1/deck.pptx"

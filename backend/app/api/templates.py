@@ -7,7 +7,7 @@ from sqlmodel import Session, select
 
 from app.config import get_settings
 from app.core.errors import ApiError, ErrorCode
-from app.core.storage import template_pptx_path
+from app.core.storage import template_pptx_path, template_pptx_upload_path
 from app.db import get_session
 from app.models.api import LayoutMapUpdate, TemplateManifest, TemplateModeUpdate, TemplateOut
 from app.models.deck import SlideType
@@ -34,8 +34,8 @@ async def upload_template(
 
     template_name = name.strip() if name and name.strip() else Path(filename).stem
     template_id = uuid4().hex
-    pptx_path = template_pptx_path(template_id)
-    pptx_path.parent.mkdir(parents=True, exist_ok=True)
+    # Always write to the writable storage path, not the read-only container root.
+    pptx_path = template_pptx_upload_path(template_id)
 
     try:
         content = await file.read()
@@ -64,10 +64,9 @@ async def upload_template(
         raise ApiError(ErrorCode.TEMPLATE_INVALID, f"Failed to save template manifest: {e}") from e
 
     settings = get_settings()
-    try:
-        rel_path = pptx_path.relative_to(settings.repo_root).as_posix()
-    except ValueError:
-        rel_path = f"templates/{template_id}.pptx"
+    # Store the absolute path so the record is correct on both local and serverless runtimes.
+    # On Vercel, pptx_path is inside /tmp which is outside repo_root, so relative_to would fail.
+    rel_path = pptx_path.as_posix()
     manifest_json = manifest.model_dump_json()
 
     template_row = TemplateRow(

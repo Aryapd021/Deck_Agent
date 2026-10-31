@@ -68,6 +68,11 @@ def slide_png_path(dir: Path, k: int) -> Path:
 
 def template_pptx_path(tid: str) -> Path:
     validate_id(tid, "template_id")
+    # Writable storage location always takes priority (uploaded templates land here).
+    writable = get_settings().storage_dir / "templates" / f"{tid}.pptx"
+    if writable.exists():
+        return writable
+    # Bundled/seeded candidates (read-only, shipped inside the container).
     candidates = [
         get_settings().templates_dir / f"{tid}.pptx",
         Path(__file__).resolve().parents[2] / "templates" / f"{tid}.pptx",
@@ -76,11 +81,24 @@ def template_pptx_path(tid: str) -> Path:
     for c in candidates:
         if c.exists():
             return c
+    # Neither file exists yet: fall back to templates_dir (the canonical read path).
     return get_settings().templates_dir / f"{tid}.pptx"
+
+
+def template_pptx_upload_path(tid: str) -> Path:
+    """Return the *writable* path where a newly uploaded template .pptx should be stored."""
+    validate_id(tid, "template_id")
+    dest = get_settings().storage_dir / "templates" / f"{tid}.pptx"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    return dest
 
 
 def template_manifest_path(tid: str) -> Path:
     validate_id(tid, "template_id")
+    # Writable storage location (saved manifests land here).
+    writable = get_settings().storage_dir / "templates" / f"{tid}.manifest.json"
+    if writable.exists():
+        return writable
     candidates = [
         get_settings().templates_dir / f"{tid}.manifest.json",
         Path(__file__).resolve().parents[2] / "templates" / f"{tid}.manifest.json",
@@ -89,7 +107,7 @@ def template_manifest_path(tid: str) -> Path:
     for c in candidates:
         if c.exists():
             return c
-    return get_settings().templates_dir / f"{tid}.manifest.json"
+    return writable
 
 
 def rel_to_storage(path: Path | str) -> str:
