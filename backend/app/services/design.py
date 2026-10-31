@@ -561,8 +561,47 @@ def render_title_slide(
     slide_model: Slide,
     box: Box,
     tokens: ProfileTokens,
+    is_custom: bool = False,
 ) -> None:
-    """Title slide: left panel in primary color, right decorative panel with geometric accents."""
+    """Title slide: custom template title layout inside box, or default dual-panel canvas."""
+    if is_custom:
+        title_h = int(box.height * 0.38)
+        tb = slide.shapes.add_textbox(box.left, box.top, box.width, title_h)
+        tf = tb.text_frame
+        tf.word_wrap = True
+        tf.margin_left = 0
+        tf.margin_top = 0
+        p = tf.paragraphs[0]
+        p.text = slide_model.title.text
+        p.font.name = tokens.title_font_name
+        p.font.size = Pt(max(26.0 * tokens.scale, 22.0))
+        p.font.bold = True
+        p.font.color.rgb = hex_to_rgb(ensure_contrast(tokens.primary, tokens.bg_color, 4.5))
+
+        line_t = box.top + title_h + int(box.height * 0.02)
+        line = slide.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE, box.left, line_t, int(box.width * 0.40), max(int(box.height * 0.015), 30000)
+        )
+        line.fill.solid()
+        line.fill.fore_color.rgb = hex_to_rgb(tokens.secondary)
+        line.line.fill.background()
+
+        sub_text = slide_model.subtitle.text if slide_model.subtitle else ""
+        if sub_text:
+            s_top = line_t + int(box.height * 0.04)
+            s_h = int(box.height * 0.35)
+            tb_s = slide.shapes.add_textbox(box.left, s_top, box.width, s_h)
+            tf_s = tb_s.text_frame
+            tf_s.word_wrap = True
+            tf_s.margin_left = 0
+            tf_s.margin_top = 0
+            ps = tf_s.paragraphs[0]
+            ps.text = sub_text
+            ps.font.name = tokens.font_name
+            ps.font.size = Pt(max(15.0 * tokens.scale, 13.0))
+            ps.font.color.rgb = hex_to_rgb(ensure_contrast(tokens.text_color, tokens.bg_color, 4.5))
+        return
+
     left_w = int(box.width * 0.60)
     right_w = box.width - left_w
 
@@ -934,8 +973,9 @@ def render_architecture_slide(
     has_diagram = diagram_png is not None and Path(diagram_png).exists()
 
     if has_diagram:
-        left_w = int(box.width * 0.48)
-        right_w = box.width - left_w - tokens.gap
+        # Give the architecture diagram a generous, prominent 58% width
+        right_w = int(box.width * 0.58)
+        left_w = box.width - right_w - tokens.gap
         left_box = Box(box.left, box.top, left_w, box.height)
         right_box = Box(box.left + left_w + tokens.gap, box.top, right_w, box.height)
     else:
@@ -975,22 +1015,39 @@ def render_architecture_slide(
             )
 
     if right_box and diagram_png:
-        # Card container for diagram
+        # Prominent card container for diagram
         add_card(slide, right_box, panel_color=tokens.panel_fills[0], accent_color=tokens.primary, dashed=False, top_bar=True, tokens=tokens)
+
+        # Subtle pill badge on diagram container
+        pill_w = max(int(right_box.width * 0.42), 480000)
+        pill_h = max(int(right_box.height * 0.08), 160000)
+        pill_l = right_box.left + tokens.padding
+        pill_t = right_box.top + tokens.padding
+        add_pill(
+            slide,
+            Box(pill_l, pill_t, pill_w, pill_h),
+            "ARCHITECTURE FLOW",
+            bg_color=tokens.primary,
+            text_color=tokens.bg_color,
+            tokens=tokens,
+        )
+
         try:
             from PIL import Image as PILImage
 
             with PILImage.open(str(diagram_png)) as img:
                 img_w, img_h = img.size
             if img_w > 0 and img_h > 0:
-                pad = tokens.padding * 2
-                max_w = right_box.width - 2 * pad
-                max_h = right_box.height - 2 * pad
+                pad_x = tokens.padding
+                pad_top = pill_h + int(tokens.padding * 1.2)
+                pad_bot = tokens.padding
+                max_w = right_box.width - 2 * pad_x
+                max_h = right_box.height - pad_top - pad_bot
                 sc = min(max_w / img_w, max_h / img_h)
                 pic_w = int(img_w * sc)
                 pic_h = int(img_h * sc)
-                pic_l = right_box.left + pad + int((max_w - pic_w) / 2)
-                pic_t = right_box.top + pad + int((max_h - pic_h) / 2)
+                pic_l = right_box.left + pad_x + int((max_w - pic_w) / 2)
+                pic_t = right_box.top + pad_top + int((max_h - pic_h) / 2)
                 slide.shapes.add_picture(str(diagram_png), pic_l, pic_t, pic_w, pic_h)
         except Exception:
             pass
@@ -1289,8 +1346,9 @@ def render_designed_slide(
 
     recipe_key = choose_recipe_for_slot(slot_title, slide_model) if slot_title else slide_model.type.value
 
+    is_custom = bool(custom_body_rect is not None or (profile and profile.mode == "fill"))
     if recipe_key == "title":
-        render_title_slide(pptx_slide, slide_model, content_box, tokens)
+        render_title_slide(pptx_slide, slide_model, content_box, tokens, is_custom=is_custom)
     elif recipe_key == "problem":
         render_problem_slide(pptx_slide, slide_model, content_box, tokens, on_progress, slide_num)
     elif recipe_key == "solution":

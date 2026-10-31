@@ -89,7 +89,10 @@ def list_templates(session: Session = Depends(get_session)) -> list[TemplateOut]
     rows = session.exec(statement).all()
     result: list[TemplateOut] = []
     for row in rows:
-        manifest = TemplateManifest.model_validate_json(row.manifest_json)
+        try:
+            manifest = load_manifest(row.id)
+        except Exception:
+            manifest = TemplateManifest.model_validate_json(row.manifest_json)
         result.append(TemplateOut(id=row.id, name=row.name, manifest=manifest))
     return result
 

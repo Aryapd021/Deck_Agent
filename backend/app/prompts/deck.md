@@ -12,8 +12,8 @@ You are an expert pitch deck designer. Your task is to produce a draft presentat
 - NEVER upgrade a `needs_input` field to any other source. NEVER write 'TODO' in any field; for a missing fact write a short fill-in hint such as 'Add: measured query latency'.
 - Chat-sourced fields are allowed ONLY on `problem` and `solution` slides (architectural and technical decisions go on the solution slide).
 - `title` slide: title (project name) + subtitle (one_liner), with NO bullets.
-- Content slides (`problem`, `solution`, `features`, `tech_stack`): include 3 to 5 substantive, informative bullets per slide (up to `bullets_max`). Avoid sparse or single-line slides by leveraging the extracted facts.
-- `demo`, `impact`, and `roadmap` slides: include 2 to 4 bullets representing demonstration steps, target metrics, or roadmap milestones from facts (using `needs_input` fields where input is needed).
+- Content slides (`problem`, `solution`, `features`, `tech_stack`): include 3 to 5 substantive, informative bullets per slide (up to `bullets_max`). Format each bullet with a punchy heading and thorough explanation: 'Key Concept: Detailed explanation of the technical mechanism, its importance, and practical implementation'. Avoid sparse, vague, or single-phrase bullets.
+- `demo`, `impact`, and `roadmap` slides: include 3 to 4 detailed bullets representing concrete demonstration workflows, verified metrics/outcomes, or roadmap milestones with substantive details.
 - `architecture` slide: title + 2 to 3 caption bullets, with `image_ref` set to `"diagram"`. Every other slide must have `image_ref` as null. Caption bullets must describe the architecture and components using ONLY `repo` or `voice` sources; NEVER use `chat` source on the architecture slide.
 - `closing` slide: title + subtitle, with NO bullets unless capabilities explicitly require body bullets.
 - `notes`: 1 to 3 sentences of speaker notes (<= 600 characters) that add context and invent no new facts.
@@ -21,7 +21,8 @@ You are an expert pitch deck designer. Your task is to produce a draft presentat
 
 ### Fill Mode (when slots are provided):
 - If <slots> are provided below, generate EXACTLY one slide per slot, in the exact order of the slots.
-- For slot i, set `slot_index` to i, use the slot's title as the slide title, and tailor content to the slot's title and hint.
+- For slot i, set `slot_index` to i, use the slot's title as the slide title, and tailor content deeply to the slot's title and hint.
+- For each content slot, provide 3 to 5 rich, highly substantive bullets with bold headers ('Category: In-depth technical description and practical details') that thoroughly satisfy the slot's topic.
 - Never add, omit, merge, split, or rename slots when slots are provided. Slide count must equal the slot count.
 
 ### Data Delimiters:

@@ -39,7 +39,7 @@ from app.services.extract import build_deck, extract_facts
 from app.services.ingest import build_repo_digest
 from app.services.preview import generate_previews
 from app.services.render import render_deck
-from app.services.template_inspector import extract_palette
+from app.services.template_inspector import extract_palette, load_manifest
 from app.services.validate import enforce_fit, validate_deck
 
 
@@ -412,7 +412,14 @@ async def run_generate(ctx: JobContext) -> JobResult:
 
         repo_ref = project.repo_ref
         template_id = project.template_id
-        manifest = TemplateManifest.model_validate_json(template.manifest_json)
+        try:
+            manifest = load_manifest(template_id)
+        except Exception:
+            manifest = TemplateManifest.model_validate_json(template.manifest_json)
+        if manifest.profile and "profile" not in template.manifest_json:
+            template.manifest_json = manifest.model_dump_json()
+            session.add(template)
+            session.commit()
 
         input_row = session.get(ProjectInputRow, ctx.project_id)
         pitch_notes = input_row.pitch_notes if input_row else ""
@@ -556,7 +563,14 @@ async def run_edit(ctx: JobContext, req: EditRequest) -> JobResult:
             raise ApiError(ErrorCode.NOT_FOUND, f"Template {project.template_id} not found")
 
         template_id = project.template_id
-        manifest = TemplateManifest.model_validate_json(template.manifest_json)
+        try:
+            manifest = load_manifest(template_id)
+        except Exception:
+            manifest = TemplateManifest.model_validate_json(template.manifest_json)
+        if manifest.profile and "profile" not in template.manifest_json:
+            template.manifest_json = manifest.model_dump_json()
+            session.add(template)
+            session.commit()
 
         stmt = select(DeckVersionRow).where(
             DeckVersionRow.project_id == ctx.project_id,

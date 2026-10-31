@@ -514,57 +514,51 @@ def compute_free_box(
     margin_y = int(0.04 * slide_height)
     slide_area = slide_width * slide_height
 
-    # Exclude full-slide background rects (> 70% slide area)
+    # Exclude full-slide background rects or tall background decorations
+    # Any shape covering > 35% of slide area or taller than 50% of slide height is background/column art, NOT a header/footer bar
     non_bg_static = [
         s
         for s in static_shapes
         if not (
-            s.width * s.height > 0.7 * slide_area
-            and s.left <= 0.1 * slide_width
-            and s.top <= 0.1 * slide_height
+            (s.width * s.height > 0.35 * slide_area)
+            or (s.height > 0.50 * slide_height)
         )
     ]
 
-    if fillable_shapes:
-        min_l = min(s.left for s in fillable_shapes)
-        min_t = min(s.top for s in fillable_shapes)
-        max_r = max(s.left + s.width for s in fillable_shapes)
-        max_b = max(s.top + s.height for s in fillable_shapes)
-    else:
-        min_l = margin_x
-        min_t = int(0.18 * slide_height)
-        max_r = slide_width - margin_x
-        max_b = int(0.90 * slide_height)
-
-    # Top boundary from upper static shapes
+    # Top boundary from upper static shapes (titles, headers <= 30% slide height)
     top_shapes = [
         s.top + s.height
         for s in non_bg_static
-        if s.top < 0.25 * slide_height and (s.left < max_r and s.left + s.width > min_l)
+        if s.top < 0.25 * slide_height and s.height <= 0.30 * slide_height
     ]
-    effective_top = max(top_shapes) if top_shapes else margin_y
-    if min_t < effective_top:
-        min_t = effective_top + int(0.01 * slide_height)
+    effective_top = max(top_shapes) if top_shapes else int(0.16 * slide_height)
 
-    # Bottom boundary from lower static shapes
+    # Bottom boundary from lower static shapes (footers, page numbers <= 25% slide height)
     bottom_shapes = [
         s.top
         for s in non_bg_static
-        if s.top > 0.70 * slide_height and (s.left < max_r and s.left + s.width > min_l)
+        if s.top > 0.65 * slide_height and s.height <= 0.25 * slide_height
     ]
     effective_bottom = min(bottom_shapes) if bottom_shapes else (slide_height - margin_y)
-    if max_b > effective_bottom:
-        max_b = effective_bottom - int(0.01 * slide_height)
 
-    box_l = max(margin_x, min_l)
-    box_t = max(margin_y, min_t)
-    box_w = max(int(0.2 * slide_width), max_r - box_l)
-    box_h = max(int(0.2 * slide_height), max_b - box_t)
+    if fillable_shapes:
+        min_l = min(s.left for s in fillable_shapes)
+        max_r = max(s.left + s.width for s in fillable_shapes)
+        min_t = min(s.top for s in fillable_shapes)
+    else:
+        min_l = margin_x
+        max_r = slide_width - margin_x
+        min_t = effective_top
 
-    if box_l + box_w > slide_width - margin_x:
-        box_w = max(int(0.2 * slide_width), slide_width - margin_x - box_l)
-    if box_t + box_h > slide_height - margin_y:
-        box_h = max(int(0.2 * slide_height), slide_height - margin_y - box_t)
+    # Ensure box expands vertically to utilize the generous open canvas down to the footer
+    box_t = max(margin_y, max(effective_top + int(0.015 * slide_height), min(min_t, effective_top + int(0.02 * slide_height))))
+    box_b = min(slide_height - margin_y, effective_bottom - int(0.015 * slide_height))
+    box_h = max(int(0.35 * slide_height), box_b - box_t)
+
+    # Ensure box expands horizontally between margins and obstacles
+    box_l = max(margin_x, min(min_l, int(0.08 * slide_width)))
+    box_r = min(slide_width - margin_x, max(max_r, int(0.92 * slide_width)))
+    box_w = max(int(0.30 * slide_width), box_r - box_l)
 
     return (int(box_l), int(box_t), int(box_w), int(box_h))
 
@@ -1005,7 +999,17 @@ def load_manifest(template_id: str) -> TemplateManifest:
             f"Template manifest not found for template_id: {template_id}",
         )
     content = target_path.read_text(encoding="utf-8")
-    return TemplateManifest.model_validate_json(content)
+    m = TemplateManifest.model_validate_json(content)
+    if m.profile is None:
+        pptx_path = template_pptx_path(template_id)
+        if pptx_path.exists():
+            try:
+                m.profile = analyze_template(pptx_path)
+                m.mode = m.profile.mode
+                save_manifest(m)
+            except Exception:
+                pass
+    return m
 
 
 @dataclass
