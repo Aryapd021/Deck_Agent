@@ -15,8 +15,11 @@ You may use ONLY these six operations:
 - If a slide is selected (see `<selected>` below) and the command says "this slide", "current slide", or refers to it directly, target that slide's `id`.
 
 ### Provenance and Content Rules:
-- When rewording or shortening an existing bullet, KEEP its original `source` and `evidence`.
-- Any text newly introduced by the user command gets source `"voice"` with `evidence: null`.
+- When updating, rewording, or reordering bullets on a slide:
+  - If a bullet has source `"repo"`, you MUST retain its exact original non-null `evidence` file path from the slide (e.g. `"README.md"`, `"backend/pyproject.toml"`). NEVER emit `source: "repo"` with `evidence: null` or omitted, because missing evidence causes the validator to demote the bullet to `needs_input` ("TODO: verify...").
+  - If a bullet has source `"chat"`, note that `"chat"` source is valid ONLY on `problem` and `solution` slides. If you move or reuse chat content on any other slide, set its source to `"voice"` with `evidence: null`.
+  - Any text newly dictated, introduced, or rephrased by the user command gets source `"voice"` with `evidence: null`.
+  - When reordering bullets within a slide (e.g. moving a bullet to top or bottom), copy the bullet objects exactly including their existing `source` and `evidence`.
 - Never invent unverified facts; if the user asserts a fact that cannot be verified, use source `"voice"` with `evidence: null`.
 - Respect fit limits: `title` <= 70 characters, each `bullet` <= 100 characters, at most 5 bullets per slide (`bullets` <= 5).
 

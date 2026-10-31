@@ -50,3 +50,56 @@
 ### 7. PPTX Verification & Fallback Copy
 - Downloaded `deck.pptx` (129,024 bytes) saved to `docs/fallback/Graph_hack.pptx`.
 - Re-opened with `python-pptx` without repair prompts or errors; all 10 slides and diagram image shape verified.
+
+## Run: DeckAgent
+
+- **Repository**: `https://github.com/Aryapd021/Deck_Agent` (local path: `.`)
+- **Template ID**: `tmpl_1` (Default Template)
+- **Date**: `2026-10-31`
+- **Server Mode**: Production mode (`uvicorn app.main:app --workers 1 --port 8000`)
+
+### 1. Generation Pipeline & Timings
+- **Total Duration**: `22.12s`
+- **Committed Version**: `v1` (Project `86d06e38fcb740c7b3cac179f2f10f61`)
+- **Stage Timings**:
+  - `ingest`: 2.57s (Analyzed deckAgent 9 files)
+  - `redact`: 0.00s (Chat sanitized on upload)
+  - `digest`: 1.37s (Extracted 3 architectural decisions from chat)
+  - `facts`: 6.27s (Extracted structured facts for DeckAgent)
+  - `deck`: 4.98s (Drafted canonical 10-slide presentation)
+  - `diagram`: 2.09s (Rendered Graphviz DOT component graph to SVG and PNG)
+  - `render`: 0.15s (Built PowerPoint `.pptx` via `render_deck`)
+  - `preview`: 0.01s (Skipped in outline mode)
+  - `done`: Final version committed atomically (Deck v1 ready)
+
+### 2. Issues Found
+- **Chat Sourced Field On Architecture Slide**: In the initial draft, the LLM reused a chat-derived decision on the architecture slide caption bullets, causing `validate.py` to demote it to a `needs_input` placeholder.
+
+### 3. Fixes Made
+- `backend/app/prompts/deck.md`: Clarified that architecture caption bullets must describe architecture and components using ONLY `repo` or `voice` sources and never `chat`.
+
+### 4. Deferred Items
+- None. All generated fields, schemas, and endpoints conformed to `CONTRACT.md` specifications.
+
+### 5. Bullet & Deck Audit Result
+- **Slide 1 (Title)**: `title` "DeckAgent" (source `user`) and `subtitle` "Autonomous pitch deck generator from repositories and structured facts." (source `voice`). Clean.
+- **Slide 2 (Problem)**: 3 bullets sourced from `chat` focusing on manual creation pain points and secret token redaction. Permitted under Section 6 rules. Clean.
+- **Slide 3 (Solution)**: 3 bullets sourced from `voice` and `chat` covering automated repository scanning, Graphviz dot rendering, and professional 10-slide PowerPoint generation with custom palettes. Clean.
+- **Slide 4 (Features)**: 4 bullets covering deterministic layout mapping and provenance tracking (`voice`), interactive voice dictation editing (`voice`), FastAPI backend with async job event streaming (`repo`, `backend/app/main.py`), and React frontend studio with TanStack React Query (`repo`, `frontend/package.json`). Evidence paths verified against existing code. Clean.
+- **Slide 5 (Architecture)**: Diagram contains 5 nodes (`frontend`, `backend`, `database`, `graphviz`, `llm`) with directed edges for API calls, data persistence, diagram rendering, and LLM generation. 2 caption bullets cite `backend/app/main.py` and `frontend/package.json`. Clean.
+- **Slide 6 (Tech Stack)**: 4 bullets detailing FastAPI with SQLModel and Pydantic v2 (`backend/pyproject.toml`), React 19 with Vite and Tailwind CSS (`frontend/package.json`), python-pptx and pymupdf (`backend/pyproject.toml`), and Google GenAI / Anthropic integrations (`backend/pyproject.toml`). All verified. Clean.
+- **Slide 7 (Demo)**: 3 sequential demonstration bullets describing URL/path input configuration (`voice`), job generation with SSE progress event monitoring (`repo`, `frontend/src/App.tsx`), and slide/diagram review (`voice`). Evidence verified. Clean.
+- **Slide 8 (Impact)**: 2 bullets marked as `needs_input` placeholders prefixed with `TODO: ` (measured time reduction and user adoption metrics). Clean.
+- **Slide 9 (Roadmap)**: 1 bullet marked as `needs_input` placeholder prefixed with `TODO: ` (upcoming roadmap milestones and integrations). Clean.
+- **Slide 10 (Closing)**: "Thank You" with subtitle from voice pitch notes; bullets empty as per canonical shape. Clean.
+- **Fit Limits**: Zero truncation warnings; character lengths conform to manifest bounds.
+
+### 6. Voice Edit & Undo Test
+- **Voice Command**: `"Shorten slide 3 and move demo up"`
+- **Result (v2)**: Created version `v2`. Demonstration slide moved from position 7 (index 6) to position 6 (index 5); slide 3 bullets shortened from 3 to 2 bullets.
+- **Undo Result (v3)**: Calling `/undo` restored version `v1` state in version `v3` with summary `"Undo: restored v1"`. Slide sequence and bullet contents fully restored. Both operations passed.
+
+### 7. PPTX Verification & Fallback Copy
+- Downloaded `deck.pptx` (98,372 bytes) saved to `docs/fallback/DeckAgent.pptx`.
+- Re-opened with `python-pptx` without repair prompts or errors; all 10 slides and diagram picture shape verified.
+
