@@ -8,7 +8,9 @@ from app.models.deck import Field, SlideType
 class SlidePatch(BaseModel):
     title: Field | None = None
     subtitle: Field | None = None
+    summary: Field | None = None
     bullets: list[Field] | None = None
+    takeaway: Field | None = None
     notes: str | None = None
     layout_style: str | None = None
 

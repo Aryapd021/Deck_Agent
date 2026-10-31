@@ -4,7 +4,7 @@ from typing import Any
 from uuid import uuid4
 
 from app.config import get_settings
-from app.core.errors import ApiError
+from app.core.errors import ApiError, ErrorCode
 from app.models.api import FitLimits, TemplateManifest
 from app.models.deck import Deck, Field, Slide, SlideType, Source
 from app.models.edit_ops import (
@@ -298,6 +298,33 @@ def validate_deck(
         )
 
     return ValidationReport(deck=corrected_deck, warnings=warnings)
+
+
+def validate_generated_slide_text(deck: Deck) -> None:
+    """Rejects any generated slide text that begins with 'TODO:' or is shorter than 40 characters (except titles/headings)."""
+    for slide in deck.slides:
+        for idx, b in enumerate(slide.bullets):
+            text = b.text.strip()
+            if text.startswith("TODO:") or text.startswith("TODO"):
+                raise ApiError(
+                    ErrorCode.LLM_INVALID_OUTPUT,
+                    f"Slide '{slide.type.value}' bullet {idx+1} begins with banned 'TODO:': '{text[:30]}...'",
+                )
+            if len(text) < 40:
+                raise ApiError(
+                    ErrorCode.LLM_INVALID_OUTPUT,
+                    f"Slide '{slide.type.value}' bullet {idx+1} has length {len(text)} < 40 chars: '{text}'",
+                )
+        if slide.summary and (slide.summary.text.strip().startswith("TODO:") or slide.summary.text.strip().startswith("TODO")):
+            raise ApiError(
+                ErrorCode.LLM_INVALID_OUTPUT,
+                f"Slide '{slide.type.value}' summary begins with banned 'TODO:'",
+            )
+        if slide.takeaway and (slide.takeaway.text.strip().startswith("TODO:") or slide.takeaway.text.strip().startswith("TODO")):
+            raise ApiError(
+                ErrorCode.LLM_INVALID_OUTPUT,
+                f"Slide '{slide.type.value}' takeaway begins with banned 'TODO:'",
+            )
 
 
 def _truncate_at_word_boundary(text: str, limit: int) -> str:

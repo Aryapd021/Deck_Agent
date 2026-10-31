@@ -279,9 +279,11 @@ def _process_repo_root(
     ]
     readme_candidates.sort(key=lambda p: (p.count("/"), p))
 
+    scale = max(1.0, total_budget / 12000.0)
+
     if readme_candidates:
         readme_path = readme_candidates[0]
-        readme_budget = min(3000, total_budget - current_tokens)
+        readme_budget = min(int(3000 * scale), total_budget - current_tokens)
         if readme_budget > 0:
             raw_readme = file_contents[readme_path]
             max_chars = readme_budget * 4
@@ -291,14 +293,14 @@ def _process_repo_root(
             current_tokens += len(readme_excerpt) // 4
             files_included.append(readme_path)
 
-    # 2) dependency manifests (package.json, requirements.txt, pyproject.toml, plus go.mod, Cargo.toml, pom.xml, Gemfile if present) (<= 2500 tokens)
+    # 2) dependency manifests (package.json, requirements.txt, pyproject.toml, plus go.mod, Cargo.toml, pom.xml, Gemfile if present)
     manifest_candidates = [
         p for p in known_paths
         if Path(p).name.lower() in TARGET_MANIFESTS
     ]
     manifest_candidates.sort(key=lambda p: (p.count("/"), p))
 
-    manifest_budget = min(2500, total_budget - current_tokens)
+    manifest_budget = min(int(2500 * scale), total_budget - current_tokens)
     manifests: dict[str, str] = {}
 
     for mp in manifest_candidates:
@@ -318,8 +320,8 @@ def _process_repo_root(
     manifest_blob = " ".join(manifests.values()).lower()
     frameworks = [kw for kw in FRAMEWORK_KEYWORDS if kw in manifest_blob]
 
-    # 3) top-level tree listing plus depth-2 entries, <= 150 lines (<= 1500 tokens)
-    tree_budget = min(1500, total_budget - current_tokens)
+    # 3) top-level tree listing plus depth-2 entries, <= 150 lines
+    tree_budget = min(int(1500 * scale), total_budget - current_tokens)
     tree_entries: set[str] = set()
     for p in known_paths:
         parts = p.split("/")
@@ -342,8 +344,8 @@ def _process_repo_root(
     else:
         tree_text = ""
 
-    # 4) entrypoints named main.*, app.*, index.*, server.*, manage.py, at depth <= 3 (<= 2500 tokens)
-    entrypoint_budget = min(2500, total_budget - current_tokens)
+    # 4) entrypoints named main.*, app.*, index.*, server.*, manage.py, at depth <= 3
+    entrypoint_budget = min(int(2500 * scale), total_budget - current_tokens)
     entrypoint_candidates = []
     for p in known_paths:
         if p in files_included:
@@ -371,8 +373,8 @@ def _process_repo_root(
         entrypoint_budget -= tokens
         files_included.append(ep)
 
-    # 5) route/model files whose name contains route, router, api, controller, views, models, schema, endpoints, handler (shallowest first, <= 2500 tokens)
-    route_budget = min(2500, total_budget - current_tokens)
+    # 5) route/model files whose name contains route, router, api, controller, views, models, schema, endpoints, handler
+    route_budget = min(int(2500 * scale), total_budget - current_tokens)
     route_candidates = []
     for p in known_paths:
         if p in files_included:

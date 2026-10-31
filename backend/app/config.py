@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     github_token: str = Field(default="", repr=False)
     storage_dir: Path = Path("./storage")
     preview_mode: Literal["libreoffice", "outline"] = "libreoffice"
-    max_repo_tokens: int = 12000
+    max_repo_tokens: int = 20000
     max_slides: int = 10
     gemini_model: str = "gemini-2.5-flash"
     anthropic_model: str = "claude-3-7-sonnet-20250219"

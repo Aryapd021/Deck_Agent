@@ -20,6 +20,7 @@ class Field(BaseModel):
     text: str
     source: Source
     evidence: str | None = None
+    heading: str | None = None
 
     @field_validator("text", mode="before")
     @classmethod
@@ -50,7 +51,9 @@ class Slide(BaseModel):
     type: SlideType
     title: Field
     subtitle: Field | None = None
+    summary: Field | None = None
     bullets: list[Field] = PydField(default_factory=list)
+    takeaway: Field | None = None
     image_ref: str | None = None
     notes: str = ""
     flagged: bool = False

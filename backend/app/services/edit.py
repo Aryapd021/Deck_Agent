@@ -212,8 +212,12 @@ async def apply_ops(
                 slide.title = op.fields.title
             if op.fields.subtitle is not None:
                 slide.subtitle = op.fields.subtitle
+            if getattr(op.fields, "summary", None) is not None:
+                slide.summary = op.fields.summary
             if op.fields.bullets is not None:
                 slide.bullets = list(op.fields.bullets)
+            if getattr(op.fields, "takeaway", None) is not None:
+                slide.takeaway = op.fields.takeaway
             if op.fields.notes is not None:
                 slide.notes = op.fields.notes
             if getattr(op.fields, "layout_style", None) is not None:
