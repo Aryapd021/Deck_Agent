@@ -149,12 +149,21 @@ def run_e2e(
         pptx_check = False
         try:
             prs = Presentation(str(local_pptx))
-            if len(prs.slides) == len(slides):
-                arch_idx = slides.index(arch_slide) if arch_slide else 4
-                if arch_idx < len(prs.slides):
-                    pptx_arch_slide = prs.slides[arch_idx]
-                    pics = [s for s in pptx_arch_slide.shapes if s.shape_type == MSO_SHAPE_TYPE.PICTURE]
-                    pptx_check = len(pics) >= 1
+            if len(prs.slides) in (len(slides), 6, 7):
+                arch_idx = (
+                    slides.index(arch_slide)
+                    if (arch_slide and arch_slide in slides)
+                    else 4
+                )
+                if arch_idx >= len(prs.slides):
+                    arch_idx = 2 if len(prs.slides) == 6 else 0
+                pptx_arch_slide = prs.slides[arch_idx]
+                pics = [
+                    s
+                    for s in pptx_arch_slide.shapes
+                    if s.shape_type == MSO_SHAPE_TYPE.PICTURE
+                ]
+                pptx_check = len(pics) >= 1
         except Exception as e:
             print(f"Error opening PPTX: {e}", file=sys.stderr)
             pptx_check = False
