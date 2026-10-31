@@ -91,6 +91,7 @@ def _format_node(
     node: Node,
     palette: dict[str, str],
     modern: bool = False,
+    fontsize: int = 11,
 ) -> str:
     kind_str = node.kind.value if hasattr(node.kind, "value") else str(node.kind).lower()
     if not modern:
@@ -112,10 +113,11 @@ def _format_node(
     kind_tag = kind_str.upper()
     style = "rounded,dashed,filled" if kind_str == "external" else "rounded,filled"
 
+    tag_size = max(int(fontsize * 0.75), 8)
     label_html = (
-        f'<<table border="0" cellborder="0" cellpadding="3" cellspacing="0">'
-        f'<tr><td><font point-size="8" color="#E0E7FF"><b>{kind_tag}</b></font></td></tr>'
-        f'<tr><td><font point-size="11" color="{fontcolor}"><b>{escaped_label}</b></font></td></tr>'
+        f'<<table border="0" cellborder="0" cellpadding="4" cellspacing="0">'
+        f'<tr><td><font point-size="{tag_size}" color="#E0E7FF"><b>{kind_tag}</b></font></td></tr>'
+        f'<tr><td><font point-size="{fontsize}" color="{fontcolor}"><b>{escaped_label}</b></font></td></tr>'
         f'</table>>'
     )
     return (
@@ -128,6 +130,9 @@ def build_dot(
     graph: ComponentGraph,
     palette: dict[str, str],
     modern: bool = False,
+    rankdir: str = "LR",
+    fontsize: int = 11,
+    nodesep: float = 0.5,
 ) -> str:
     """Builds Graphviz DOT string for the component graph using the given palette."""
     if not modern:
@@ -195,13 +200,13 @@ def build_dot(
     # --- Modern Layout Engine ---
     lines = [
         "digraph G {",
-        "    rankdir=LR;",
+        f"    rankdir={rankdir};",
         "    dpi=220;",
         "    pad=0.4;",
-        "    nodesep=0.5;",
+        f"    nodesep={nodesep:.2f};",
         "    ranksep=0.9;",
         '    bgcolor="transparent";',
-        '    node [fontname="Arial", fontsize=10];',
+        f'    node [fontname="Arial", fontsize={fontsize}];',
         '    edge [fontname="Arial", fontsize=9, color="#9CA3AF", penwidth=1.6, arrowsize=0.7];',
     ]
 
@@ -230,14 +235,14 @@ def build_dot(
         lines.append('        color="#E5E7EB";')
         lines.append('        fontcolor="#1F2937";')
         lines.append('        fontname="Arial";')
-        lines.append('        fontsize=10;')
+        lines.append(f'        fontsize={max(int(fontsize * 0.9), 9)};')
         for dot_id, node in members:
-            lines.append(f"        {_format_node(dot_id, node, palette, modern=True)}")
+            lines.append(f"        {_format_node(dot_id, node, palette, modern=True, fontsize=fontsize)}")
         lines.append("    }")
 
     # Render ungrouped nodes
     for dot_id, node in ungrouped:
-        lines.append(f"    {_format_node(dot_id, node, palette, modern=True)}")
+        lines.append(f"    {_format_node(dot_id, node, palette, modern=True, fontsize=fontsize)}")
 
     # Ordered ranks: frontend -> backend -> data/ai/external -> infra
     fe_nodes = [f"n{i}" for i, n in enumerate(graph.nodes) if (n.kind.value if hasattr(n.kind, "value") else str(n.kind).lower()) == "frontend"]
@@ -273,6 +278,7 @@ def render_diagram(
     palette: dict[str, str],
     out_dir: Path,
     modern: bool | None = None,
+    target_box_in: tuple[float, float] | None = None,
 ) -> tuple[Path, Path]:
     """Renders diagram.svg and diagram.png into out_dir using dot."""
     if modern is None:
@@ -302,42 +308,72 @@ def render_diagram(
     svg_path = out_path / "diagram.svg"
     png_path = out_path / "diagram.png"
 
-    dot_content = build_dot(graph, palette, modern=modern)
+    target_w_in, target_h_in = target_box_in if target_box_in else (7.5, 4.5)
+    rankdir = "LR" if target_w_in >= target_h_in * 1.05 else "TB"
+    current_fontsize = 12
+    current_nodesep = 0.5
+    last_dot_content = ""
 
-    # Render SVG
+    for attempt in range(3):
+        last_dot_content = build_dot(
+            graph,
+            palette,
+            modern=modern,
+            rankdir=rankdir,
+            fontsize=current_fontsize,
+            nodesep=current_nodesep,
+        )
+
+        try:
+            proc_png = subprocess.run(
+                [dot_binary, "-Tpng"],
+                input=last_dot_content.encode("utf-8"),
+                capture_output=True,
+                timeout=30,
+            )
+        except Exception as e:
+            raise RuntimeError(f"dot -Tpng execution error: {e}") from e
+
+        if proc_png.returncode != 0:
+            stderr_text = (
+                proc_png.stderr.decode("utf-8", errors="replace").strip()
+                if isinstance(proc_png.stderr, bytes)
+                else str(proc_png.stderr).strip()
+            )
+            raise RuntimeError(
+                f"dot -Tpng failed with exit code {proc_png.returncode}: {stderr_text}"
+            )
+        png_path.write_bytes(proc_png.stdout)
+
+        try:
+            from PIL import Image as PILImage
+            with PILImage.open(png_path) as img:
+                img_w, img_h = img.size
+            natural_w_in = img_w / 220.0
+            natural_h_in = img_h / 220.0
+            scale = min(target_w_in / natural_w_in, target_h_in / natural_h_in)
+            placed_w_in = natural_w_in * scale
+            effective_pt = current_fontsize * (placed_w_in / natural_w_in) if natural_w_in > 0 else 12.0
+            if effective_pt >= 12.0 or attempt == 2:
+                break
+            scale_boost = 12.0 / max(effective_pt, 4.0)
+            current_fontsize = min(int(current_fontsize * scale_boost) + 1, 32)
+            current_nodesep = max(0.25, current_nodesep * 0.8)
+        except Exception:
+            break
+
+    # Render final SVG
     try:
         proc_svg = subprocess.run(
             [dot_binary, "-Tsvg"],
-            input=dot_content,
+            input=last_dot_content,
             text=True,
             capture_output=True,
             timeout=30,
         )
-    except Exception as e:
-        raise RuntimeError(f"dot -Tsvg execution error: {e}") from e
-
-    if proc_svg.returncode != 0:
-        raise RuntimeError(
-            f"dot -Tsvg failed with exit code {proc_svg.returncode}: {proc_svg.stderr.strip()}"
-        )
-    svg_path.write_text(proc_svg.stdout, encoding="utf-8")
-
-    # Render PNG
-    try:
-        proc_png = subprocess.run(
-            [dot_binary, "-Tpng"],
-            input=dot_content.encode("utf-8"),
-            capture_output=True,
-            timeout=30,
-        )
-    except Exception as e:
-        raise RuntimeError(f"dot -Tpng execution error: {e}") from e
-
-    if proc_png.returncode != 0:
-        stderr_text = proc_png.stderr.decode("utf-8", errors="replace").strip()
-        raise RuntimeError(
-            f"dot -Tpng failed with exit code {proc_png.returncode}: {stderr_text}"
-        )
-    png_path.write_bytes(proc_png.stdout)
+        if proc_svg.returncode == 0:
+            svg_path.write_text(proc_svg.stdout, encoding="utf-8")
+    except Exception:
+        pass
 
     return svg_path, png_path

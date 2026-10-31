@@ -400,6 +400,13 @@ async def commit_version(
         raise
 
 
+def _invoke_render_diagram(diagram: Any, palette: Any, tmp_dir: Path, target_box_in: tuple[float, float] | None = None) -> Any:
+    try:
+        return render_diagram(diagram, palette, tmp_dir, target_box_in=target_box_in)
+    except TypeError:
+        return render_diagram(diagram, palette, tmp_dir)
+
+
 async def run_generate(ctx: JobContext) -> JobResult:
     with session_scope() as session:
         project = session.get(ProjectRow, ctx.project_id)
@@ -412,6 +419,7 @@ async def run_generate(ctx: JobContext) -> JobResult:
 
         repo_ref = project.repo_ref
         template_id = project.template_id
+        template_name = template.name
         try:
             manifest = load_manifest(template_id)
         except Exception:
@@ -494,7 +502,18 @@ async def run_generate(ctx: JobContext) -> JobResult:
                 palette = get_palette({"palette": lazy_palette})
 
         if deck.diagram is not None:
-            await asyncio.to_thread(render_diagram, deck.diagram, palette, tmp_dir)
+            target_box_in = (8.0, 4.5)
+            try:
+                from app.services.template_inspector import analyze_template
+                tmpl_prof = analyze_template(tmpl_path)
+                cb = tmpl_prof.content_box
+                target_box_in = (
+                    (cb.width / 914400.0) * 0.70,
+                    (cb.height / 914400.0) * 0.60,
+                )
+            except Exception:
+                pass
+            await asyncio.to_thread(_invoke_render_diagram, deck.diagram, palette, tmp_dir, target_box_in)
             await ctx.emit(stage="diagram", status="done", message="Rendered architecture diagram")
         else:
             await ctx.emit(stage="diagram", status="done", message="skipped")
@@ -507,7 +526,7 @@ async def run_generate(ctx: JobContext) -> JobResult:
         await ctx.emit(
             stage="render",
             status="progress",
-            message=f"Using template: {template.name} ({mode_val} mode, {n_count} {n_label})",
+            message=f"Using template: {template_name} ({mode_val} mode, {n_count} {n_label})",
         )
         out_pptx = tmp_dir / "deck.pptx"
         diagram_png = tmp_dir / "diagram.png"
@@ -648,7 +667,18 @@ async def run_edit(ctx: JobContext, req: EditRequest) -> JobResult:
                     palette = get_palette({"palette": lazy_palette})
 
             if new_deck.diagram is not None:
-                await asyncio.to_thread(render_diagram, new_deck.diagram, palette, tmp_dir)
+                target_box_in = (8.0, 4.5)
+                try:
+                    from app.services.template_inspector import analyze_template
+                    tmpl_prof = analyze_template(tmpl_path)
+                    cb = tmpl_prof.content_box
+                    target_box_in = (
+                        (cb.width / 914400.0) * 0.70,
+                        (cb.height / 914400.0) * 0.60,
+                    )
+                except Exception:
+                    pass
+                await asyncio.to_thread(_invoke_render_diagram, new_deck.diagram, palette, tmp_dir, target_box_in)
                 await ctx.emit(stage="diagram", status="done", message="Rendered architecture diagram")
             else:
                 await ctx.emit(stage="diagram", status="done", message="skipped")

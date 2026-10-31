@@ -1021,23 +1021,83 @@ def render_architecture_slide(
     on_progress: Any = None,
     slide_num: int = 1,
 ) -> None:
-    bullets = slide_model.bullets
+    bullets = slide_model.bullets[:3]  # Max 3 short notes per Step 5
     has_diagram = diagram_png is not None and Path(diagram_png).exists()
+    user_policy = getattr(slide_model, "layout_style", None)
+
+    # Inspect diagram image aspect ratio
+    img_w, img_h = 1000, 600
+    if has_diagram:
+        try:
+            from PIL import Image as PILImage
+            with PILImage.open(str(diagram_png)) as img:
+                img_w, img_h = img.size
+        except Exception:
+            pass
+    diag_ar = (img_w / img_h) if img_h > 0 else 1.6
+
+    pad_x = int(tokens.padding * 0.6)
+    pad_y = int(tokens.padding * 0.6)
+    pill_h = max(int(box.height * 0.08), 160000)
+    content_area = box.width * box.height
 
     if has_diagram:
-        # Give the architecture diagram a generous, prominent 58% width
-        right_w = int(box.width * 0.58)
-        left_w = box.width - right_w - tokens.gap
-        left_box = Box(box.left, box.top, left_w, box.height)
-        right_box = Box(box.left + left_w + tokens.gap, box.top, right_w, box.height)
+        if diag_ar >= 1.3 or user_policy == "horizontal":
+            # Layout A: Wide diagram centered in hero frame (>=60% width, >=55% area)
+            min_pic_w = int(box.width * 0.62)
+            target_pic_w = max(min_pic_w, int((content_area * 0.55 * diag_ar) ** 0.5))
+            pic_w = min(int(box.width * 0.95), target_pic_w)
+            pic_h = int(pic_w / diag_ar)
+
+            # Cap height if exceeding box height
+            max_allowed_h = int(box.height * 0.88) - pill_h - 2 * pad_y
+            if pic_h > max_allowed_h:
+                pic_h = max_allowed_h
+                pic_w = min(int(box.width * 0.95), int(pic_h * diag_ar))
+
+            diag_w = pic_w + 2 * pad_x
+            diag_h = pic_h + pill_h + 2 * pad_y
+            diag_l = box.left + int((box.width - diag_w) / 2)
+            diag_t = box.top
+            diag_box = Box(diag_l, diag_t, diag_w, diag_h)
+
+            remaining_h = box.bottom - diag_box.bottom - tokens.gap
+            if bullets and remaining_h >= int(box.height * 0.14):
+                notes_box = Box(box.left, diag_box.bottom + tokens.gap, box.width, remaining_h)
+                notes_policy = "horizontal"
+            else:
+                notes_box = None
+                notes_policy = "horizontal"
+        else:
+            # Layout B: Tall diagram on one side (>=60% width), notes beside (never squeezed below)
+            min_pic_w = int(box.width * 0.60)
+            target_pic_h = int(box.height * 0.90) - pill_h - 2 * pad_y
+            pic_h = target_pic_h
+            pic_w = int(pic_h * diag_ar)
+            if pic_w < min_pic_w:
+                pic_w = min_pic_w
+                pic_h = min(int(box.height * 0.92) - pill_h - 2 * pad_y, int(pic_w / diag_ar))
+
+            diag_w = pic_w + 2 * pad_x
+            diag_h = pic_h + pill_h + 2 * pad_y
+            diag_l = box.right - diag_w
+            diag_t = box.top + int((box.height - diag_h) / 2)
+            diag_box = Box(diag_l, diag_t, diag_w, diag_h)
+
+            notes_w = diag_box.left - box.left - tokens.gap
+            if bullets and notes_w >= int(box.width * 0.20):
+                notes_box = Box(box.left, box.top, notes_w, box.height)
+                notes_policy = "vertical"
+            else:
+                notes_box = None
+                notes_policy = "vertical"
     else:
-        left_box = box
-        right_box = None
+        notes_box = box
+        diag_box = None
+        notes_policy = user_policy if user_policy in ("vertical", "horizontal") else "auto"
 
     if bullets:
-        user_policy = getattr(slide_model, "layout_style", None)
-        policy = user_policy if user_policy in ("vertical", "horizontal") else "vertical"
-        card_boxes = place_grid(len(bullets), left_box, policy=policy, gap_x=tokens.gap if policy == "horizontal" else 0, gap_y=tokens.gap)
+        card_boxes = place_grid(len(bullets), notes_box, policy=notes_policy, gap_x=tokens.gap if notes_policy == "horizontal" else 0, gap_y=tokens.gap)
         for i, (b, cb) in enumerate(zip(bullets, card_boxes, strict=False)):
             is_ni = (b.source == Source.NEEDS_INPUT)
             accent = tokens.accents[i % len(tokens.accents)]
@@ -1079,15 +1139,15 @@ def render_architecture_slide(
                 slide_num=slide_num,
             )
 
-    if right_box and diagram_png:
-        # Prominent card container for diagram
-        add_card(slide, right_box, panel_color=tokens.panel_fills[0], accent_color=tokens.primary, dashed=False, top_bar=True, tokens=tokens)
+    if diag_box and diagram_png:
+        # Prominent card container for diagram (hero frame)
+        add_card(slide, diag_box, panel_color=tokens.panel_fills[0], accent_color=tokens.primary, dashed=False, top_bar=True, tokens=tokens)
 
-        # Subtle pill badge on diagram container
-        pill_w = max(int(right_box.width * 0.42), 480000)
-        pill_h = max(int(right_box.height * 0.08), 160000)
-        pill_l = right_box.left + tokens.padding
-        pill_t = right_box.top + tokens.padding
+        # Pill badge on diagram container
+        pill_w = max(int(diag_box.width * 0.38), 480000)
+        pill_h = max(int(diag_box.height * 0.08), 160000)
+        pill_l = diag_box.left + tokens.padding
+        pill_t = diag_box.top + tokens.padding
         add_pill(
             slide,
             Box(pill_l, pill_t, pill_w, pill_h),
@@ -1103,16 +1163,15 @@ def render_architecture_slide(
             with PILImage.open(str(diagram_png)) as img:
                 img_w, img_h = img.size
             if img_w > 0 and img_h > 0:
-                pad_x = tokens.padding
-                pad_top = pill_h + int(tokens.padding * 1.2)
-                pad_bot = tokens.padding
-                max_w = right_box.width - 2 * pad_x
-                max_h = right_box.height - pad_top - pad_bot
+                pad_top = pill_h + pad_y
+                pad_bot = pad_y
+                max_w = diag_box.width - 2 * pad_x
+                max_h = diag_box.height - pad_top - pad_bot
                 sc = min(max_w / img_w, max_h / img_h)
                 pic_w = int(img_w * sc)
                 pic_h = int(img_h * sc)
-                pic_l = right_box.left + pad_x + int((max_w - pic_w) / 2)
-                pic_t = right_box.top + pad_top + int((max_h - pic_h) / 2)
+                pic_l = diag_box.left + pad_x + int((max_w - pic_w) / 2)
+                pic_t = diag_box.top + pad_top + int((max_h - pic_h) / 2)
                 slide.shapes.add_picture(str(diagram_png), pic_l, pic_t, pic_w, pic_h)
         except Exception:
             pass
@@ -1203,8 +1262,12 @@ def render_demo_slide(
     on_progress: Any = None,
     slide_num: int = 1,
 ) -> None:
-    # Demo slide shares architecture split recipe
-    render_architecture_slide(slide, slide_model, box, tokens, diagram_png, on_progress, slide_num)
+    # Never insert the architecture diagram on any slide other than Architecture / System Design
+    # unless slide.image_ref explicitly points to it.
+    if getattr(slide_model, "image_ref", None) == "diagram" and diagram_png and Path(diagram_png).exists():
+        render_architecture_slide(slide, slide_model, box, tokens, diagram_png, on_progress, slide_num)
+    else:
+        render_features_slide(slide, slide_model, box, tokens, on_progress, slide_num)
 
 
 def render_impact_slide(
