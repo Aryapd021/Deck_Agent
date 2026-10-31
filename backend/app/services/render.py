@@ -402,25 +402,113 @@ def _render_deck_into_existing_slides(
 
         # 3. Populate Details on title slide
         if details_shape and s_idx == 0 and details_shape.has_text_frame:
+            title_meta = {}
+            if title_slide:
+                sources = []
+                if title_slide.subtitle:
+                    sources.append(title_slide.subtitle.text)
+                if title_slide.notes:
+                    sources.append(title_slide.notes)
+                for b in title_slide.bullets:
+                    sources.append(b.text)
+
+                for src in sources:
+                    for part in src.split("\n"):
+                        p_clean = part.strip()
+                        p_lower = p_clean.lower()
+                        if any(
+                            k in p_lower
+                            for k in [
+                                "problem statement id",
+                                "ps id",
+                                "statement id",
+                                "psid",
+                            ]
+                        ):
+                            val = (
+                                p_clean.split(":")[-1]
+                                if ":" in p_clean
+                                else p_clean.split("-")[-1]
+                            )
+                            val = val.strip()
+                            if val:
+                                title_meta["ps_id"] = val
+                        elif any(k in p_lower for k in ["team id", "teamid"]):
+                            val = (
+                                p_clean.split(":")[-1]
+                                if ":" in p_clean
+                                else p_clean.split("-")[-1]
+                            )
+                            val = val.strip()
+                            if val:
+                                title_meta["team_id"] = val
+                        elif "team name" in p_lower:
+                            val = (
+                                p_clean.split(":")[-1]
+                                if ":" in p_clean
+                                else p_clean.split("-")[-1]
+                            )
+                            val = val.strip()
+                            if val:
+                                title_meta["team_name"] = val
+                        elif "theme" in p_lower:
+                            val = (
+                                p_clean.split(":")[-1]
+                                if ":" in p_clean
+                                else p_clean.split("-")[-1]
+                            )
+                            val = val.strip()
+                            if val:
+                                title_meta["theme"] = val
+                        elif "category" in p_lower:
+                            val = (
+                                p_clean.split(":")[-1]
+                                if ":" in p_clean
+                                else p_clean.split("-")[-1]
+                            )
+                            val = val.strip()
+                            if val:
+                                title_meta["category"] = val
+                        elif p_clean.isdigit() and len(p_clean) in (3, 4, 5, 6):
+                            if "ps_id" not in title_meta:
+                                title_meta["ps_id"] = p_clean
+
             lines = details_shape.text_frame.text.split("\n")
             new_lines = []
             for line in lines:
-                if "problem statement title" in line.lower():
-                    prefix = (
-                        line.split("-")[0]
-                        if "-" in line
-                        else line.split(":")[0]
-                        if ":" in line
-                        else "Problem Statement Title"
-                    )
-                    new_lines.append(f"{prefix}- {title_text}: {subtitle_text}")
-                elif "team name" in line.lower() and "(" in line:
-                    prefix = (
-                        line.split("-")[0]
-                        if "-" in line
-                        else "Team Name (Registered on portal)"
-                    )
-                    new_lines.append(f"{prefix}- DeckAgent Team")
+                l_lower = line.lower()
+                sep = (
+                    "–"
+                    if "–" in line
+                    else "-"
+                    if "-" in line
+                    else ":"
+                    if ":" in line
+                    else ""
+                )
+                prefix = line.split(sep)[0].strip() if sep else line.strip()
+
+                if "problem statement title" in l_lower:
+                    new_lines.append(f"{prefix} – {title_text}: {subtitle_text}")
+                elif any(
+                    k in l_lower
+                    for k in ["problem statement id", "ps id", "statement id"]
+                ):
+                    ps_val = title_meta.get("ps_id", "2303")
+                    new_lines.append(f"{prefix} – {ps_val}")
+                elif "team name" in l_lower and "(" in line:
+                    t_name = title_meta.get("team_name", "DeckAgent Team")
+                    new_lines.append(f"{prefix} – {t_name}")
+                elif "team id" in l_lower:
+                    t_id = title_meta.get("team_id")
+                    if t_id:
+                        new_lines.append(f"{prefix} – {t_id}")
+                    else:
+                        new_lines.append(line)
+                elif "theme" in l_lower and title_meta.get("theme"):
+                    new_lines.append(f"{prefix} – {title_meta['theme']}")
+                elif "category" in l_lower and title_meta.get("category"):
+                    new_lines.append(f"{prefix} – {title_meta['category']}")
                 else:
                     new_lines.append(line)
             details_shape.text_frame.text = "\n".join(new_lines)
