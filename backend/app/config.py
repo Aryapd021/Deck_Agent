@@ -76,10 +76,12 @@ class Settings(BaseSettings):
 
     @property
     def templates_dir(self) -> Path:
-        if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
-            p = self.storage_dir / "templates"
-            p.mkdir(parents=True, exist_ok=True)
-            return p
+        writable_tmpl = self.storage_dir / "templates"
+        if writable_tmpl.exists():
+            return writable_tmpl
+        backend_tmpl = Path(__file__).resolve().parents[1] / "templates"
+        if backend_tmpl.exists():
+            return backend_tmpl
         return REPO_ROOT / "templates"
 
     @property

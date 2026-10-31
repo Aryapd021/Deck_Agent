@@ -1,0 +1,978 @@
+{
+  "template_id": "8eb41dac11974621833969b5dd7b05af",
+  "name": "SIH2026-IDEA-Presentation-Format",
+  "slide_width": 12192000,
+  "slide_height": 6858000,
+  "layouts": [
+    {
+      "index": 0,
+      "name": "Title Slide",
+      "placeholders": [
+        {
+          "idx": 0,
+          "type": 3,
+          "name": "Title 1",
+          "left": 914400,
+          "top": 2130428,
+          "width": 10363200,
+          "height": 1470025,
+          "char_limit": 70
+        },
+        {
+          "idx": 1,
+          "type": 4,
+          "name": "Subtitle 2",
+          "left": 1828800,
+          "top": 3886200,
+          "width": 8534400,
+          "height": 1752600,
+          "char_limit": 168
+        },
+        {
+          "idx": 10,
+          "type": 16,
+          "name": "Date Placeholder 3",
+          "left": 609600,
+          "top": 6356353,
+          "width": 2844800,
+          "height": 365125,
+          "char_limit": 0
+        },
+        {
+          "idx": 11,
+          "type": 15,
+          "name": "Footer Placeholder 4",
+          "left": 4165600,
+          "top": 6356353,
+          "width": 3860800,
+          "height": 365125,
+          "char_limit": 0
+        },
+        {
+          "idx": 12,
+          "type": 13,
+          "name": "Slide Number Placeholder 5",
+          "left": 8737600,
+          "top": 6356353,
+          "width": 2844800,
+          "height": 365125,
+          "char_limit": 0
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "name": "Title and Content",
+      "placeholders": [
+        {
+          "idx": 0,
+          "type": 1,
+          "name": "Title 1",
+          "left": 609600,
+          "top": -47625,
+          "width": 10972800,
+          "height": 1143000,
+          "char_limit": 70
+        },
+        {
+          "idx": 1,
+          "type": 7,
+          "name": "Content Placeholder 2",
+          "left": 609600,
+          "top": 1095375,
+          "width": 10972800,
+          "height": 5030788,
+          "char_limit": 1426
+        },
+        {
+          "idx": 10,
+          "type": 16,
+          "name": "Date Placeholder 3",
+          "left": 609600,
+          "top": 6356353,
+          "width": 2844800,
+          "height": 365125,
+          "char_limit": 0
+        },
+        {
+          "idx": 11,
+          "type": 15,
+          "name": "Footer Placeholder 4",
+          "left": 4165600,
+          "top": 6356353,
+          "width": 3860800,
+          "height": 365125,
+          "char_limit": 0
+        },
+        {
+          "idx": 12,
+          "type": 13,
+          "name": "Slide Number Placeholder 5",
+          "left": 8737600,
+          "top": 6356353,
+          "width": 2844800,
+          "height": 365125,
+          "char_limit": 0
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "name": "Section Header",
+      "placeholders": [
+        {
+          "idx": 0,
+          "type": 1,
+          "name": "Title 1",
+          "left": 963084,
+          "top": 4406903,
+          "width": 10363200,
+          "height": 1362075,
+          "char_limit": 70
+        },
+        {
+          "idx": 1,
+          "type": 2,
+          "name": "Text Placeholder 2",
+          "left": 963084,
+          "top": 2906713,
+          "width": 10363200,
+          "height": 1500187,
+          "char_limit": 401
+        },
+        {
+          "idx": 10,
+          "type": 16,
+          "name": "Date Placeholder 3",
+          "left": 609600,
+          "top": 6356353,
+          "width": 2844800,
+          "height": 365125,
+          "char_limit": 0
+        },
+        {
+          "idx": 11,
+          "type": 15,
+          "name": "Footer Placeholder 4",
+          "left": 4165600,
+          "top": 6356353,
+          "width": 3860800,
+          "height": 365125,
+          "char_limit": 0
+        },
+        {
+          "idx": 12,
+          "type": 13,
+          "name": "Slide Number Placeholder 5",
+          "left": 8737600,
+          "top": 6356353,
+          "width": 2844800,
+          "height": 365125,
+          "char_limit": 0
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "name": "Two Content",
+      "placeholders": [
+        {
+          "idx": 0,
+          "type": 1,
+          "name": "Title 1",
+          "left": 609600,
+          "top": -47625,
+          "width": 10972800,
+          "height": 1143000,
+          "char_limit": 70
+        },
+        {
+          "idx": 1,
+          "type": 7,
+          "name": "Content Placeholder 2",
+          "left": 609600,
+          "top": 1600203,
+          "width": 5384800,
+          "height": 4525963,
+          "char_limit": 629
+        },
+        {
+          "idx": 2,
+          "type": 7,
+          "name": "Content Placeholder 3",
+          "left": 6197600,
+          "top": 1600203,
+          "width": 5384800,
+          "height": 4525963,
+          "char_limit": 629
+        },
+        {
+          "idx": 10,
+          "type": 16,
+          "name": "Date Placeholder 3",
+          "left": 609600,
+          "top": 6356353,
+          "width": 2844800,
+          "height": 365125,
+          "char_limit": 0
+        },
+        {
+          "idx": 11,
+          "type": 15,
+          "name": "Footer Placeholder 4",
+          "left": 4165600,
+          "top": 6356353,
+          "width": 3860800,
+          "height": 365125,
+          "char_limit": 0
+        },
+        {
+          "idx": 12,
+          "type": 13,
+          "name": "Slide Number Placeholder 5",
+          "left": 8737600,
+          "top": 6356353,
+          "width": 2844800,
+          "height": 365125,
+          "char_limit": 0
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "name": "Comparison",
+      "placeholders": [
+        {
+          "idx": 0,
+          "type": 1,
+          "name": "Title 1",
+          "left": 609600,
+          "top": -47625,
+          "width": 10972800,
+          "height": 1143000,
+          "char_limit": 70
+        },
+        {
+          "idx": 1,
+          "type": 2,
+          "name": "Text Placeholder 2",
+          "left": 609600,
+          "top": 1535113,
+          "width": 5386917,
+          "height": 639762,
+          "char_limit": 89
+        },
+        {
+          "idx": 2,
+          "type": 7,
+          "name": "Content Placeholder 3",
+          "left": 609600,
+          "top": 2174875,
+          "width": 5386917,
+          "height": 3951288,
+          "char_limit": 549
+        },
+        {
+          "idx": 3,
+          "type": 2,
+          "name": "Text Placeholder 4",
+          "left": 6193369,
+          "top": 1535113,
+          "width": 5389033,
+          "height": 639762,
+          "char_limit": 89
+        },
+        {
+          "idx": 4,
+          "type": 7,
+          "name": "Content Placeholder 5",
+          "left": 6193369,
+          "top": 2174875,
+          "width": 5389033,
+          "height": 3951288,
+          "char_limit": 550
+        },
+        {
+          "idx": 10,
+          "type": 16,
+          "name": "Date Placeholder 3",
+          "left": 609600,
+          "top": 6356353,
+          "width": 2844800,
+          "height": 365125,
+          "char_limit": 0
+        },
+        {
+          "idx": 11,
+          "type": 15,
+          "name": "Footer Placeholder 4",
+          "left": 4165600,
+          "top": 6356353,
+          "width": 3860800,
+          "height": 365125,
+          "char_limit": 0
+        },
+        {
+          "idx": 12,
+          "type": 13,
+          "name": "Slide Number Placeholder 5",
+          "left": 8737600,
+          "top": 6356353,
+          "width": 2844800,
+          "height": 365125,
+          "char_limit": 0
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "name": "Title Only",
+      "placeholders": [
+        {
+          "idx": 0,
+          "type": 1,
+          "name": "Title 1",
+          "left": 609600,
+          "top": -47625,
+          "width": 10972800,
+          "height": 1143000,
+          "char_limit": 70
+        },
+        {
+          "idx": 10,
+          "type": 16,
+          "name": "Date Placeholder 3",
+          "left": 609600,
+          "top": 6356353,
+          "width": 2844800,
+          "height": 365125,
+          "char_limit": 0
+        },
+        {
+          "idx": 11,
+          "type": 15,
+          "name": "Footer Placeholder 4",
+          "left": 4165600,
+          "top": 6356353,
+          "width": 3860800,
+          "height": 365125,
+          "char_limit": 0
+        },
+        {
+          "idx": 12,
+          "type": 13,
+          "name": "Slide Number Placeholder 5",
+          "left": 8737600,
+          "top": 6356353,
+          "width": 2844800,
+          "height": 365125,
+          "char_limit": 0
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "name": "Blank",
+      "placeholders": [
+        {
+          "idx": 10,
+          "type": 16,
+          "name": "Date Placeholder 3",
+          "left": 609600,
+          "top": 6356353,
+          "width": 2844800,
+          "height": 365125,
+          "char_limit": 0
+        },
+        {
+          "idx": 11,
+          "type": 15,
+          "name": "Footer Placeholder 4",
+          "left": 4165600,
+          "top": 6356353,
+          "width": 3860800,
+          "height": 365125,
+          "char_limit": 0
+        },
+        {
+          "idx": 12,
+          "type": 13,
+          "name": "Slide Number Placeholder 5",
+          "left": 8737600,
+          "top": 6356353,
+          "width": 2844800,
+          "height": 365125,
+          "char_limit": 0
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "name": "Content with Caption",
+      "placeholders": [
+        {
+          "idx": 0,
+          "type": 1,
+          "name": "Title 1",
+          "left": 609602,
+          "top": 273050,
+          "width": 4011084,
+          "height": 1162050,
+          "char_limit": 39
+        },
+        {
+          "idx": 1,
+          "type": 7,
+          "name": "Content Placeholder 2",
+          "left": 4766733,
+          "top": 273053,
+          "width": 6815667,
+          "height": 5853113,
+          "char_limit": 1030
+        },
+        {
+          "idx": 2,
+          "type": 2,
+          "name": "Text Placeholder 3",
+          "left": 609602,
+          "top": 1435103,
+          "width": 4011084,
+          "height": 4691063,
+          "char_limit": 486
+        },
+        {
+          "idx": 10,
+          "type": 16,
+          "name": "Date Placeholder 3",
+          "left": 609600,
+          "top": 6356353,
+          "width": 2844800,
+          "height": 365125,
+          "char_limit": 0
+        },
+        {
+          "idx": 11,
+          "type": 15,
+          "name": "Footer Placeholder 4",
+          "left": 4165600,
+          "top": 6356353,
+          "width": 3860800,
+          "height": 365125,
+          "char_limit": 0
+        },
+        {
+          "idx": 12,
+          "type": 13,
+          "name": "Slide Number Placeholder 5",
+          "left": 8737600,
+          "top": 6356353,
+          "width": 2844800,
+          "height": 365125,
+          "char_limit": 0
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "name": "Picture with Caption",
+      "placeholders": [
+        {
+          "idx": 0,
+          "type": 1,
+          "name": "Title 1",
+          "left": 2389717,
+          "top": 4800600,
+          "width": 7315200,
+          "height": 566738,
+          "char_limit": 41
+        },
+        {
+          "idx": 1,
+          "type": 18,
+          "name": "Picture Placeholder 2",
+          "left": 2389717,
+          "top": 612775,
+          "width": 7315200,
+          "height": 4114800,
+          "char_limit": 0
+        },
+        {
+          "idx": 2,
+          "type": 2,
+          "name": "Text Placeholder 3",
+          "left": 2389717,
+          "top": 5367338,
+          "width": 7315200,
+          "height": 804862,
+          "char_limit": 152
+        },
+        {
+          "idx": 10,
+          "type": 16,
+          "name": "Date Placeholder 3",
+          "left": 609600,
+          "top": 6356353,
+          "width": 2844800,
+          "height": 365125,
+          "char_limit": 0
+        },
+        {
+          "idx": 11,
+          "type": 15,
+          "name": "Footer Placeholder 4",
+          "left": 4165600,
+          "top": 6356353,
+          "width": 3860800,
+          "height": 365125,
+          "char_limit": 0
+        },
+        {
+          "idx": 12,
+          "type": 13,
+          "name": "Slide Number Placeholder 5",
+          "left": 8737600,
+          "top": 6356353,
+          "width": 2844800,
+          "height": 365125,
+          "char_limit": 0
+        }
+      ]
+    },
+    {
+      "index": 9,
+      "name": "Title and Vertical Text",
+      "placeholders": [
+        {
+          "idx": 0,
+          "type": 1,
+          "name": "Title 1",
+          "left": 609600,
+          "top": -47625,
+          "width": 10972800,
+          "height": 1143000,
+          "char_limit": 70
+        },
+        {
+          "idx": 1,
+          "type": 2,
+          "name": "Vertical Text Placeholder 2",
+          "left": 609600,
+          "top": 1095375,
+          "width": 10972800,
+          "height": 5030788,
+          "char_limit": 1426
+        },
+        {
+          "idx": 10,
+          "type": 16,
+          "name": "Date Placeholder 3",
+          "left": 609600,
+          "top": 6356353,
+          "width": 2844800,
+          "height": 365125,
+          "char_limit": 0
+        },
+        {
+          "idx": 11,
+          "type": 15,
+          "name": "Footer Placeholder 4",
+          "left": 4165600,
+          "top": 6356353,
+          "width": 3860800,
+          "height": 365125,
+          "char_limit": 0
+        },
+        {
+          "idx": 12,
+          "type": 13,
+          "name": "Slide Number Placeholder 5",
+          "left": 8737600,
+          "top": 6356353,
+          "width": 2844800,
+          "height": 365125,
+          "char_limit": 0
+        }
+      ]
+    },
+    {
+      "index": 10,
+      "name": "Vertical Title and Text",
+      "placeholders": [
+        {
+          "idx": 0,
+          "type": 1,
+          "name": "Vertical Title 1",
+          "left": 8839200,
+          "top": 274641,
+          "width": 2743200,
+          "height": 5851525,
+          "char_limit": 30
+        },
+        {
+          "idx": 1,
+          "type": 2,
+          "name": "Vertical Text Placeholder 2",
+          "left": 609600,
+          "top": 274641,
+          "width": 8026400,
+          "height": 5851525,
+          "char_limit": 1213
+        },
+        {
+          "idx": 10,
+          "type": 16,
+          "name": "Date Placeholder 3",
+          "left": 609600,
+          "top": 6356353,
+          "width": 2844800,
+          "height": 365125,
+          "char_limit": 0
+        },
+        {
+          "idx": 11,
+          "type": 15,
+          "name": "Footer Placeholder 4",
+          "left": 4165600,
+          "top": 6356353,
+          "width": 3860800,
+          "height": 365125,
+          "char_limit": 0
+        },
+        {
+          "idx": 12,
+          "type": 13,
+          "name": "Slide Number Placeholder 5",
+          "left": 8737600,
+          "top": 6356353,
+          "width": 2844800,
+          "height": 365125,
+          "char_limit": 0
+        }
+      ]
+    }
+  ],
+  "layout_map": {
+    "title": 0,
+    "problem": 1,
+    "solution": 1,
+    "features": 1,
+    "architecture": 8,
+    "tech_stack": 1,
+    "demo": 8,
+    "impact": 1,
+    "roadmap": 1,
+    "closing": 0
+  },
+  "slots": {
+    "title": {
+      "title_idx": 0,
+      "subtitle_idx": 1,
+      "body_idx": null,
+      "picture_idx": null
+    },
+    "problem": {
+      "title_idx": 0,
+      "subtitle_idx": null,
+      "body_idx": 1,
+      "picture_idx": null
+    },
+    "solution": {
+      "title_idx": 0,
+      "subtitle_idx": null,
+      "body_idx": 1,
+      "picture_idx": null
+    },
+    "features": {
+      "title_idx": 0,
+      "subtitle_idx": null,
+      "body_idx": 1,
+      "picture_idx": null
+    },
+    "architecture": {
+      "title_idx": 0,
+      "subtitle_idx": null,
+      "body_idx": 2,
+      "picture_idx": 1
+    },
+    "tech_stack": {
+      "title_idx": 0,
+      "subtitle_idx": null,
+      "body_idx": 1,
+      "picture_idx": null
+    },
+    "demo": {
+      "title_idx": 0,
+      "subtitle_idx": null,
+      "body_idx": 2,
+      "picture_idx": 1
+    },
+    "impact": {
+      "title_idx": 0,
+      "subtitle_idx": null,
+      "body_idx": 1,
+      "picture_idx": null
+    },
+    "roadmap": {
+      "title_idx": 0,
+      "subtitle_idx": null,
+      "body_idx": 1,
+      "picture_idx": null
+    },
+    "closing": {
+      "title_idx": 0,
+      "subtitle_idx": 1,
+      "body_idx": null,
+      "picture_idx": null
+    }
+  },
+  "limits": {
+    "title": {
+      "title_max": 70,
+      "bullet_max": 100,
+      "bullets_max": 0,
+      "notes_max": 600
+    },
+    "problem": {
+      "title_max": 70,
+      "bullet_max": 100,
+      "bullets_max": 5,
+      "notes_max": 600
+    },
+    "solution": {
+      "title_max": 70,
+      "bullet_max": 100,
+      "bullets_max": 5,
+      "notes_max": 600
+    },
+    "features": {
+      "title_max": 70,
+      "bullet_max": 100,
+      "bullets_max": 5,
+      "notes_max": 600
+    },
+    "architecture": {
+      "title_max": 41,
+      "bullet_max": 100,
+      "bullets_max": 3,
+      "notes_max": 600
+    },
+    "tech_stack": {
+      "title_max": 70,
+      "bullet_max": 100,
+      "bullets_max": 5,
+      "notes_max": 600
+    },
+    "demo": {
+      "title_max": 41,
+      "bullet_max": 100,
+      "bullets_max": 3,
+      "notes_max": 600
+    },
+    "impact": {
+      "title_max": 70,
+      "bullet_max": 100,
+      "bullets_max": 5,
+      "notes_max": 600
+    },
+    "roadmap": {
+      "title_max": 70,
+      "bullet_max": 100,
+      "bullets_max": 5,
+      "notes_max": 600
+    },
+    "closing": {
+      "title_max": 70,
+      "bullet_max": 100,
+      "bullets_max": 0,
+      "notes_max": 600
+    }
+  },
+  "palette": {
+    "text": "#000000",
+    "background": "#FFFFFF",
+    "dark2": "#1F497D",
+    "light2": "#EEECE1",
+    "primary": "#4F81BD",
+    "secondary": "#C0504D",
+    "accent": "#9BBB59"
+  },
+  "warnings": [
+    "Slide 1: 6 static shapes (preserved), 1 fillable shapes (replaced), free box (487680, 2504084, 10728960, 3976726)",
+    "Slide 2: 6 static shapes (preserved), 1 fillable shapes (replaced), free box (487680, 1280160, 11216640, 4971732)",
+    "Slide 3: 6 static shapes (preserved), 1 fillable shapes (replaced), free box (609600, 1232535, 10607040, 5019357)",
+    "Slide 4: 6 static shapes (preserved), 1 fillable shapes (replaced), free box (609600, 1232535, 10607040, 5019357)",
+    "Slide 5: 6 static shapes (preserved), 1 fillable shapes (replaced), free box (609600, 1232535, 10607040, 5019357)",
+    "Slide 6: 7 static shapes (preserved), 0 fillable shapes (replaced), free box (487680, 1198245, 11216640, 5053647)",
+    "Slide 7: 7 static shapes (preserved), 1 fillable shapes (replaced), free box (487680, 1660692, 11216640, 4591200)"
+  ],
+  "mode": "fill",
+  "profile": {
+    "slide_width": 12192000,
+    "slide_height": 6858000,
+    "scale": 1.0,
+    "aspect_ratio": "16:9",
+    "dk1": "#000000",
+    "lt1": "#FFFFFF",
+    "dk2": "#1F497D",
+    "lt2": "#EEECE1",
+    "accent1": "#4F81BD",
+    "accent2": "#C0504D",
+    "accent3": "#9BBB59",
+    "accent4": "#8064A2",
+    "accent5": "#4BACC6",
+    "accent6": "#F79646",
+    "major_font": "Calibri",
+    "minor_font": "Calibri",
+    "background": "light",
+    "background_luminance": "light",
+    "theme_name": "Office",
+    "role_primary": "006FC0",
+    "role_secondary": "6B4FA0",
+    "role_tertiary": "1A9C8F",
+    "role_quaternary": "F28C28",
+    "role_neutral": "6B7280",
+    "primary": "#2563EB",
+    "secondary": "#0D9488",
+    "tertiary": "#D97706",
+    "quaternary": "#7C3AED",
+    "neutral": "#64748B",
+    "accents": [
+      "006FC0",
+      "6B4FA0",
+      "1A9C8F",
+      "F28C28",
+      "2E9E5B",
+      "D9A441"
+    ],
+    "panels": [
+      "ECF3FB",
+      "F5F4FA",
+      "E8F5EE",
+      "FDF1E3",
+      "F6F7F9"
+    ],
+    "corner_radius_ratio": 0.025,
+    "padding_ratio": 0.015,
+    "gap_ratio": 0.018,
+    "base_body_size_pt": 12.0,
+    "min_body_size_pt": 9.0,
+    "mode": "fill",
+    "slots": [
+      {
+        "slot_index": 0,
+        "slot_title": "SMART INDIA HACKATHON 2026",
+        "hint": "Problem Statement ID – Problem Statement Title- Theme- PS Category- Software/Hardware Team ID- Team Name (Registered on portal)"
+      },
+      {
+        "slot_index": 1,
+        "slot_title": "IDEA TITLE",
+        "hint": "Proposed Solution (Describe your Idea/Solution/Prototype)   Detailed explanation of the proposed solution  How it addresses the problem Innovation and"
+      },
+      {
+        "slot_index": 2,
+        "slot_title": "TECHNICAL APPROACH",
+        "hint": "Technologies to be used (e.g. programming languages, frameworks, hardware) Methodology and process for implementation (Flow Charts/Images/ working pro"
+      },
+      {
+        "slot_index": 3,
+        "slot_title": "FEASIBILITY AND VIABILITY",
+        "hint": "Analysis of the feasibility of the idea Potential challenges and risks Strategies for overcoming these challenges"
+      },
+      {
+        "slot_index": 4,
+        "slot_title": "IMPACT AND BENEFITS",
+        "hint": "Potential impact on the target audience Benefits of the solution (social, economic, environmental, etc.)"
+      },
+      {
+        "slot_index": 5,
+        "slot_title": "RESEARCH  AND REFERENCES",
+        "hint": ""
+      },
+      {
+        "slot_index": 6,
+        "slot_title": "IMPORTANT INSTRUCTIONS",
+        "hint": "Kindly keep the maximum slides limit up to six (6). ( Including the title slide)  Try to avoid paragraphs and post your idea in points /diagrams / Inf"
+      }
+    ],
+    "slide_reports": [],
+    "analysis_reports": [
+      {
+        "slide_index": 0,
+        "static_count": 6,
+        "fillable_count": 1,
+        "free_box": [
+          487680,
+          2504084,
+          10728960,
+          3976726
+        ]
+      },
+      {
+        "slide_index": 1,
+        "static_count": 6,
+        "fillable_count": 1,
+        "free_box": [
+          487680,
+          1280160,
+          11216640,
+          4971732
+        ]
+      },
+      {
+        "slide_index": 2,
+        "static_count": 6,
+        "fillable_count": 1,
+        "free_box": [
+          609600,
+          1232535,
+          10607040,
+          5019357
+        ]
+      },
+      {
+        "slide_index": 3,
+        "static_count": 6,
+        "fillable_count": 1,
+        "free_box": [
+          609600,
+          1232535,
+          10607040,
+          5019357
+        ]
+      },
+      {
+        "slide_index": 4,
+        "static_count": 6,
+        "fillable_count": 1,
+        "free_box": [
+          609600,
+          1232535,
+          10607040,
+          5019357
+        ]
+      },
+      {
+        "slide_index": 5,
+        "static_count": 7,
+        "fillable_count": 0,
+        "free_box": [
+          487680,
+          1198245,
+          11216640,
+          5053647
+        ]
+      },
+      {
+        "slide_index": 6,
+        "static_count": 7,
+        "fillable_count": 1,
+        "free_box": [
+          487680,
+          1660692,
+          11216640,
+          4591200
+        ]
+      }
+    ]
+  }
+}

@@ -53,7 +53,17 @@ async def create_project(
             template = default_tmpl
             req.template_id = default_tmpl.id
         else:
-            raise ApiError(ErrorCode.NOT_FOUND, f"Template {req.template_id} not found")
+            default_row = TemplateRow(
+                id="default",
+                name="Default Template",
+                manifest_json="{}",
+                created_at=datetime.now(timezone.utc),
+            )
+            session.add(default_row)
+            session.commit()
+            session.refresh(default_row)
+            template = default_row
+            req.template_id = "default"
 
     repo_ref = (req.repo_url or req.repo_path or "").strip()
     project_id = uuid4().hex

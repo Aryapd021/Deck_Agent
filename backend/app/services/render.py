@@ -816,18 +816,26 @@ def render_deck(
     if not template_file.exists():
         from app.config import get_settings
 
-        fallback = get_settings().templates_dir / "default.pptx"
-        if fallback.exists():
-            template_file = fallback
-        else:
-            candidates = sorted(get_settings().templates_dir.glob("*.pptx"))
-            if candidates:
-                template_file = candidates[0]
+        candidates = [
+            get_settings().templates_dir / f"{template_file.name}",
+            get_settings().templates_dir / "default.pptx",
+            Path(__file__).resolve().parents[2] / "templates" / f"{template_file.name}",
+            Path(__file__).resolve().parents[2] / "templates" / "default.pptx",
+            get_settings().repo_root / "templates" / f"{template_file.name}",
+            get_settings().repo_root / "templates" / "default.pptx",
+        ]
+        for c in candidates:
+            if c.exists():
+                template_file = c
+                break
 
     out_file = Path(out_path)
     out_file.parent.mkdir(parents=True, exist_ok=True)
 
-    prs = Presentation(str(template_file))
+    if template_file.exists():
+        prs = Presentation(str(template_file))
+    else:
+        prs = Presentation()
 
     # Check design engine setting
     try:

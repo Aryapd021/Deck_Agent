@@ -50,8 +50,17 @@ def init_db() -> None:
         try:
             count = session.exec(select(func.count(TemplateRow.id))).one()
             if count == 0:
-                bundled_dir = settings.repo_root / "templates"
-                if bundled_dir.exists():
+                candidate_dirs = [
+                    Path(__file__).resolve().parents[1] / "templates",
+                    settings.repo_root / "templates",
+                ]
+                bundled_dir = None
+                for cd in candidate_dirs:
+                    if cd.exists():
+                        bundled_dir = cd
+                        break
+
+                if bundled_dir and bundled_dir.exists():
                     for pptx_file in bundled_dir.glob("*.pptx"):
                         tid = pptx_file.stem
                         m_file = bundled_dir / f"{tid}.manifest.json"
@@ -71,7 +80,19 @@ def init_db() -> None:
                             created_at=datetime.now(timezone.utc),
                         )
                         session.add(row)
-                    session.commit()
+
+                # Ensure an explicit 'default' template row exists
+                has_default = session.get(TemplateRow, "default")
+                if not has_default:
+                    session.add(
+                        TemplateRow(
+                            id="default",
+                            name="Default Template",
+                            manifest_json="{}",
+                            created_at=datetime.now(timezone.utc),
+                        )
+                    )
+                session.commit()
         except Exception:
             session.rollback()
 

@@ -415,15 +415,38 @@ async def run_generate(ctx: JobContext) -> JobResult:
 
         template = session.get(TemplateRow, project.template_id)
         if not template:
-            raise ApiError(ErrorCode.NOT_FOUND, f"Template {project.template_id} not found")
+            template = session.exec(select(TemplateRow)).first()
+            if not template:
+                template = TemplateRow(
+                    id="default",
+                    name="Default Template",
+                    manifest_json="{}",
+                    created_at=datetime.now(timezone.utc),
+                )
+                session.add(template)
+                session.commit()
+                session.refresh(template)
 
         repo_ref = project.repo_ref
-        template_id = project.template_id
+        template_id = template.id
         template_name = template.name
         try:
             manifest = load_manifest(template_id)
         except Exception:
-            manifest = TemplateManifest.model_validate_json(template.manifest_json)
+            try:
+                manifest = TemplateManifest.model_validate_json(template.manifest_json)
+            except Exception:
+                manifest = TemplateManifest(
+                    template_id=template_id,
+                    name=template_name,
+                    slide_width=12192000,
+                    slide_height=6858000,
+                    layouts=[],
+                    layout_map={},
+                    slots={},
+                    limits={},
+                    mode="layouts",
+                )
         if manifest.profile and "profile" not in template.manifest_json:
             template.manifest_json = manifest.model_dump_json()
             session.add(template)
