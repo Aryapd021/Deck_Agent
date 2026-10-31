@@ -79,7 +79,7 @@
 - `backend/app/prompts/deck.md`: Clarified that architecture caption bullets must describe architecture and components using ONLY `repo` or `voice` sources and never `chat`.
 
 ### 4. Deferred Items
-- None. All generated fields, schemas, and endpoints conformed to `CONTRACT.md` specifications.
+- **Conversational Color & Font Styling**: User requested per-element color and font modifications via conversational edit commands (e.g. "make title red", "change font to Arial"). Under `CONTRACT.md` Section 0 rules ("no new features, no stack changes, edit ops limited to update_slide, move_slide, delete_slide, add_slide, set_diagram_focus, regenerate") and Day 5 QA rules, arbitrary runtime styling commands are deferred. Visual styling, typography, and color schemes remain strictly template-governed (.pptx masters and manifest.palette), with template font and color extraction and reproduction now actively enforced in render.py.
 
 ### 5. Bullet & Deck Audit Result
 - **Slide 1 (Title)**: `title` "DeckAgent" (source `user`) and `subtitle` "Autonomous pitch deck generator from repositories and structured facts." (source `voice`). Clean.
