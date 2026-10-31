@@ -53,6 +53,7 @@ class Slide(BaseModel):
     bullets: list[Field] = PydField(default_factory=list)
     image_ref: str | None = None
     notes: str = ""
+    flagged: bool = False
 
     @field_validator("bullets")
     @classmethod

@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     max_slides: int = 10
     gemini_model: str = "gemini-2.5-flash"
     anthropic_model: str = "claude-3-7-sonnet-20250219"
+    design_engine: bool = True
 
     @field_validator("storage_dir", mode="after")
     @classmethod

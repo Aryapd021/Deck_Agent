@@ -501,6 +501,11 @@ export interface components {
              * @default
              */
             notes: string;
+            /**
+             * Flagged
+             * @default false
+             */
+            flagged: boolean;
         };
         /**
          * SlideType

@@ -496,6 +496,14 @@ async def run_generate(ctx: JobContext) -> JobResult:
         await ctx.emit(stage="render", status="started", message="Rendering PowerPoint deck...")
         out_pptx = tmp_dir / "deck.pptx"
         diagram_png = tmp_dir / "diagram.png"
+        loop = asyncio.get_running_loop()
+
+        def _on_render_progress(msg: str) -> None:
+            asyncio.run_coroutine_threadsafe(
+                ctx.emit(stage="render", status="progress", message=msg),
+                loop,
+            )
+
         await asyncio.to_thread(
             render_deck,
             deck,
@@ -503,6 +511,7 @@ async def run_generate(ctx: JobContext) -> JobResult:
             tmpl_path,
             out_pptx,
             diagram_png if diagram_png.exists() else None,
+            _on_render_progress,
         )
         await ctx.emit(stage="render", status="done", message="Rendered PowerPoint presentation")
 
@@ -627,6 +636,14 @@ async def run_edit(ctx: JobContext, req: EditRequest) -> JobResult:
         tmpl_path = template_pptx_path(template_id)
         out_pptx = tmp_dir / "deck.pptx"
         diagram_png = tmp_dir / "diagram.png"
+        loop = asyncio.get_running_loop()
+
+        def _on_edit_render_progress(msg: str) -> None:
+            asyncio.run_coroutine_threadsafe(
+                ctx.emit(stage="render", status="progress", message=msg),
+                loop,
+            )
+
         await asyncio.to_thread(
             render_deck,
             new_deck,
@@ -634,6 +651,7 @@ async def run_edit(ctx: JobContext, req: EditRequest) -> JobResult:
             tmpl_path,
             out_pptx,
             diagram_png if diagram_png.exists() else None,
+            _on_edit_render_progress,
         )
         await ctx.emit(stage="render", status="done", message="Rendered PowerPoint presentation")
 

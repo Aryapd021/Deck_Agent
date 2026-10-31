@@ -10,6 +10,12 @@ from pptx.util import Inches, Pt
 
 from app.models.api import TemplateManifest
 from app.models.deck import Deck
+from app.services.design import (
+    SLIDE_HEIGHT_EMU,
+    SLIDE_WIDTH_EMU,
+    is_all_needs_input,
+    render_designed_slide,
+)
 from app.services.template_inspector import resolve_picture_target
 
 
@@ -606,93 +612,119 @@ def _render_deck_into_existing_slides(
             pptx_slide.notes_slide.notes_text_frame.text = s_notes
 
 
-def render_deck(
-    deck: Deck,
+def _render_legacy_slide_content(
+    slide: Any,
+    pptx_slide: Any,
     manifest: TemplateManifest,
-    template_path: Path,
-    out_path: Path,
-    diagram_png: Path | None = None,
+    slot: Any,
+    diagram_png: Path | None,
 ) -> None:
-    template_file = Path(template_path)
-    if not template_file.exists():
-        from app.config import get_settings
+    st_key = slide.type.value
+    ph_by_idx = {ph.placeholder_format.idx: ph for ph in pptx_slide.placeholders}
 
-        fallback = get_settings().templates_dir / "default.pptx"
-        if fallback.exists():
-            template_file = fallback
-        else:
-            candidates = sorted(get_settings().templates_dir.glob("*.pptx"))
-            if candidates:
-                template_file = candidates[0]
+    if slot:
+        # Title text into title_idx
+        if slot.title_idx is not None and slot.title_idx in ph_by_idx:
+            title_ph = ph_by_idx[slot.title_idx]
+            if title_ph.has_text_frame:
+                title_ph.text_frame.text = slide.title.text
 
-    out_file = Path(out_path)
-    out_file.parent.mkdir(parents=True, exist_ok=True)
+        # Subtitle into subtitle_idx if present and mapped
+        if (
+            slide.subtitle is not None
+            and slot.subtitle_idx is not None
+            and slot.subtitle_idx in ph_by_idx
+        ):
+            sub_ph = ph_by_idx[slot.subtitle_idx]
+            if sub_ph.has_text_frame:
+                sub_ph.text_frame.text = slide.subtitle.text
 
-    prs = Presentation(str(template_file))
+        # Bullets into body_idx
+        if (
+            slot.body_idx is not None
+            and slot.body_idx in ph_by_idx
+            and slide.bullets
+        ):
+            body_ph = ph_by_idx[slot.body_idx]
+            if body_ph.has_text_frame:
+                tf = body_ph.text_frame
+                tf.paragraphs[0].text = slide.bullets[0].text
+                tf.paragraphs[0].level = 0
+                for bullet in slide.bullets[1:]:
+                    p = tf.add_paragraph()
+                    p.text = bullet.text
+                    p.level = 0
 
-    # If the template file already contains designed slides (e.g. user-provided presentation deck),
-    # populate its exact slides and placeholders directly.
-    if len(prs.slides) > 0:
-        _render_deck_into_existing_slides(prs, deck, manifest, diagram_png)
-        prs.save(str(out_file))
-        return
+        # Image insertion for diagram
+        if slide.image_ref == "diagram" and diagram_png is not None:
+            diagram_file = Path(diagram_png)
+            if diagram_file.exists() and diagram_file.is_file():
+                target = resolve_picture_target(manifest, st_key)
+                if target is not None:
+                    img_w, img_h = _get_png_dimensions(diagram_file)
+                    if img_w > 0 and img_h > 0:
+                        if target.kind == "placeholder":
+                            box_left = target.left
+                            box_top = target.top
+                            box_width = target.width
+                            box_height = target.height
 
-    # Delete every existing slide properly to prevent PowerPoint repair prompts (for empty master templates)
-    for sldId in list(prs.slides._sldIdLst):
-        prs.part.drop_rel(sldId.rId)
-        prs.slides._sldIdLst.remove(sldId)
+                            scale = min(box_width / img_w, box_height / img_h)
+                            pic_width = int(img_w * scale)
+                            pic_height = int(img_h * scale)
+                            pic_left = box_left + int((box_width - pic_width) / 2)
+                            pic_top = box_top + int((box_height - pic_height) / 2)
 
-    for slide in deck.slides:
-        st_key = slide.type.value
-        layout_idx = manifest.layout_map[st_key]
-        slide_layout = prs.slide_layouts[layout_idx]
-        pptx_slide = prs.slides.add_slide(slide_layout)
+                            pptx_slide.shapes.add_picture(
+                                str(diagram_file),
+                                pic_left,
+                                pic_top,
+                                pic_width,
+                                pic_height,
+                            )
 
-        slot = manifest.slots.get(st_key)
-        ph_by_idx = {ph.placeholder_format.idx: ph for ph in pptx_slide.placeholders}
+                            if target.idx is not None and target.idx in ph_by_idx:
+                                pic_ph = ph_by_idx[target.idx]
+                                sp = pic_ph._element
+                                parent = sp.getparent()
+                                if parent is not None:
+                                    parent.remove(sp)
 
-        if slot:
-            # Title text into title_idx
-            if slot.title_idx is not None and slot.title_idx in ph_by_idx:
-                title_ph = ph_by_idx[slot.title_idx]
-                if title_ph.has_text_frame:
-                    title_ph.text_frame.text = slide.title.text
+                        elif target.kind == "area":
+                            if slide.bullets:
+                                body_ph = (
+                                    ph_by_idx.get(slot.body_idx)
+                                    if slot and slot.body_idx is not None
+                                    else None
+                                )
+                                orig_left = body_ph.left if body_ph else target.left
+                                orig_top = body_ph.top if body_ph else target.top
+                                orig_width = body_ph.width if body_ph else target.width
+                                orig_height = body_ph.height if body_ph else target.height
 
-            # Subtitle into subtitle_idx if present and mapped
-            if (
-                slide.subtitle is not None
-                and slot.subtitle_idx is not None
-                and slot.subtitle_idx in ph_by_idx
-            ):
-                sub_ph = ph_by_idx[slot.subtitle_idx]
-                if sub_ph.has_text_frame:
-                    sub_ph.text_frame.text = slide.subtitle.text
+                                new_body_width = int(orig_width * 0.35)
+                                if body_ph:
+                                    body_ph.width = new_body_width
 
-            # Bullets into body_idx
-            if (
-                slot.body_idx is not None
-                and slot.body_idx in ph_by_idx
-                and slide.bullets
-            ):
-                body_ph = ph_by_idx[slot.body_idx]
-                if body_ph.has_text_frame:
-                    tf = body_ph.text_frame
-                    tf.paragraphs[0].text = slide.bullets[0].text
-                    tf.paragraphs[0].level = 0
-                    for bullet in slide.bullets[1:]:
-                        p = tf.add_paragraph()
-                        p.text = bullet.text
-                        p.level = 0
+                                rem_left = orig_left + new_body_width
+                                rem_width = orig_width - new_body_width
+                                rem_top = orig_top
+                                rem_height = orig_height
 
-            # Image insertion for diagram
-            if slide.image_ref == "diagram" and diagram_png is not None:
-                diagram_file = Path(diagram_png)
-                if diagram_file.exists() and diagram_file.is_file():
-                    target = resolve_picture_target(manifest, st_key)
-                    if target is not None:
-                        img_w, img_h = _get_png_dimensions(diagram_file)
-                        if img_w > 0 and img_h > 0:
-                            if target.kind == "placeholder":
+                                scale = min(rem_width / img_w, rem_height / img_h)
+                                pic_width = int(img_w * scale)
+                                pic_height = int(img_h * scale)
+                                pic_left = rem_left + int((rem_width - pic_width) / 2)
+                                pic_top = rem_top + int((rem_height - pic_height) / 2)
+
+                                pptx_slide.shapes.add_picture(
+                                    str(diagram_file),
+                                    pic_left,
+                                    pic_top,
+                                    pic_width,
+                                    pic_height,
+                                )
+                            else:
                                 box_left = target.left
                                 box_top = target.top
                                 box_width = target.width
@@ -712,85 +744,272 @@ def render_deck(
                                     pic_height,
                                 )
 
-                                # Remove the empty picture placeholder element
-                                if target.idx is not None and target.idx in ph_by_idx:
-                                    pic_ph = ph_by_idx[target.idx]
-                                    sp = pic_ph._element
-                                    parent = sp.getparent()
-                                    if parent is not None:
-                                        parent.remove(sp)
+    # Speaker notes via notes_slide
+    if slide.notes:
+        pptx_slide.notes_slide.notes_text_frame.text = slide.notes
 
-                            elif target.kind == "area":
-                                if slide.bullets:
-                                    body_ph = (
-                                        ph_by_idx.get(slot.body_idx)
-                                        if slot and slot.body_idx is not None
-                                        else None
-                                    )
-                                    orig_left = body_ph.left if body_ph else target.left
-                                    orig_top = body_ph.top if body_ph else target.top
-                                    orig_width = body_ph.width if body_ph else target.width
-                                    orig_height = body_ph.height if body_ph else target.height
-
-                                    new_body_width = int(orig_width * 0.35)
-                                    if body_ph:
-                                        body_ph.width = new_body_width
-
-                                    rem_left = orig_left + new_body_width
-                                    rem_width = orig_width - new_body_width
-                                    rem_top = orig_top
-                                    rem_height = orig_height
-
-                                    scale = min(rem_width / img_w, rem_height / img_h)
-                                    pic_width = int(img_w * scale)
-                                    pic_height = int(img_h * scale)
-                                    pic_left = rem_left + int((rem_width - pic_width) / 2)
-                                    pic_top = rem_top + int((rem_height - pic_height) / 2)
-
-                                    pptx_slide.shapes.add_picture(
-                                        str(diagram_file),
-                                        pic_left,
-                                        pic_top,
-                                        pic_width,
-                                        pic_height,
-                                    )
-                                else:
-                                    box_left = target.left
-                                    box_top = target.top
-                                    box_width = target.width
-                                    box_height = target.height
-
-                                    scale = min(box_width / img_w, box_height / img_h)
-                                    pic_width = int(img_w * scale)
-                                    pic_height = int(img_h * scale)
-                                    pic_left = box_left + int((box_width - pic_width) / 2)
-                                    pic_top = box_top + int((box_height - pic_height) / 2)
-
-                                    pptx_slide.shapes.add_picture(
-                                        str(diagram_file),
-                                        pic_left,
-                                        pic_top,
-                                        pic_width,
-                                        pic_height,
-                                    )
-
-        # Speaker notes via notes_slide
-        if slide.notes:
-            pptx_slide.notes_slide.notes_text_frame.text = slide.notes
-
-        # Remove every still-empty placeholder element so no "Click to add text" boxes remain
-        for ph in list(pptx_slide.placeholders):
-            is_empty = False
-            if ph.has_text_frame:
-                if not ph.text_frame.text.strip():
-                    is_empty = True
-            else:
+    # Remove every still-empty placeholder element so no "Click to add text" boxes remain
+    for ph in list(pptx_slide.placeholders):
+        is_empty = False
+        if ph.has_text_frame:
+            if not ph.text_frame.text.strip():
                 is_empty = True
+        else:
+            is_empty = True
 
-            if is_empty:
-                sp = ph._element
+        if is_empty:
+            sp = ph._element
+            parent = sp.getparent()
+            if parent is not None:
+                parent.remove(sp)
+
+
+def render_deck(
+    deck: Deck,
+    manifest: TemplateManifest,
+    template_path: Path,
+    out_path: Path,
+    diagram_png: Path | None = None,
+    on_progress: Any = None,
+) -> None:
+    from app.services.design import (
+        SLIDE_HEIGHT_EMU,
+        SLIDE_WIDTH_EMU,
+        is_all_needs_input,
+        render_designed_slide,
+    )
+
+    template_file = Path(template_path)
+    if not template_file.exists():
+        from app.config import get_settings
+
+        fallback = get_settings().templates_dir / "default.pptx"
+        if fallback.exists():
+            template_file = fallback
+        else:
+            candidates = sorted(get_settings().templates_dir.glob("*.pptx"))
+            if candidates:
+                template_file = candidates[0]
+
+    out_file = Path(out_path)
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+
+    prs = Presentation(str(template_file))
+
+    # Check design engine setting
+    try:
+        from app.config import settings
+
+        use_design_engine = getattr(settings, "design_engine", True)
+    except Exception:
+        use_design_engine = True
+
+    # If the template file already contains designed slides (e.g. user-provided presentation deck),
+    # populate its exact slides and placeholders directly.
+    if len(prs.slides) > 0:
+        _render_deck_into_existing_slides(prs, deck, manifest, diagram_png)
+        prs.save(str(out_file))
+        return
+
+    # Filter out slides where every bullet is a needs_input field
+    slides_to_render: list[Any] = []
+    for slide in deck.slides:
+        if is_all_needs_input(slide):
+            slide.flagged = True
+            continue
+        slides_to_render.append(slide)
+
+    if not slides_to_render:
+        slides_to_render = list(deck.slides)
+
+    # Determine if this is the built-in default canvas or an uploaded custom template
+    is_builtin_default = False
+    tmpl_name_lower = template_file.name.lower()
+    m_name_lower = (manifest.name or "").lower()
+    m_id = str(getattr(manifest, "template_id", getattr(manifest, "id", "")) or "")
+
+    if (
+        tmpl_name_lower in ("tmpl_1.pptx", "default.pptx", "default_tmpl.pptx")
+        or m_id in ("tmpl_1", "default", "test_tmpl_001")
+        or m_name_lower in ("default", "blank", "python-pptx", "default template")
+        or (prs.slide_width == 9144000 and prs.slide_height == 6858000)
+    ):
+        is_builtin_default = True
+
+    # Delete every existing slide properly to prevent PowerPoint repair prompts
+    for sldId in list(prs.slides._sldIdLst):
+        prs.part.drop_rel(sldId.rId)
+        prs.slides._sldIdLst.remove(sldId)
+
+    if is_builtin_default and use_design_engine:
+        # 16:9 canvas: 13.333 x 7.5 in
+        prs.slide_width = SLIDE_WIDTH_EMU
+        prs.slide_height = SLIDE_HEIGHT_EMU
+
+        # Find layouts
+        title_layout = None
+        title_only_layout = None
+        for l in prs.slide_layouts:
+            if "title only" in l.name.lower():
+                title_only_layout = l
+            elif "title slide" in l.name.lower():
+                title_layout = l
+
+        if not title_only_layout:
+            title_only_layout = (
+                prs.slide_layouts[5]
+                if len(prs.slide_layouts) > 5
+                else prs.slide_layouts[0]
+            )
+        if not title_layout:
+            title_layout = prs.slide_layouts[0]
+
+        total_slides = len(slides_to_render)
+        project_name = getattr(deck, "project_id", "") or "PROJECT DECK"
+
+        for i, slide in enumerate(slides_to_render):
+            st_key = slide.type.value
+            slot = manifest.slots.get(st_key)
+            is_hero_slide = (slide.type.value in ("title", "closing"))
+
+            if is_hero_slide:
+                pptx_slide = prs.slides.add_slide(title_layout)
+                ph_by_idx = {
+                    ph.placeholder_format.idx: ph for ph in pptx_slide.placeholders
+                }
+                # Position title placeholder (idx 0)
+                if 0 in ph_by_idx:
+                    t_ph = ph_by_idx[0]
+                    t_ph.left = Inches(0.8)
+                    t_ph.top = Inches(1.8)
+                    t_ph.width = Inches(6.4)
+                    t_ph.height = Inches(2.2)
+                    t_ph.text = slide.title.text
+                # Position subtitle placeholder (idx 1)
+                if 1 in ph_by_idx and slide.subtitle:
+                    s_ph = ph_by_idx[1]
+                    s_ph.left = Inches(0.8)
+                    s_ph.top = Inches(4.6)
+                    s_ph.width = Inches(6.4)
+                    s_ph.height = Inches(1.8)
+                    s_ph.text = slide.subtitle.text
+            else:
+                pptx_slide = prs.slides.add_slide(title_only_layout)
+                ph_by_idx = {
+                    ph.placeholder_format.idx: ph for ph in pptx_slide.placeholders
+                }
+                if 0 in ph_by_idx:
+                    t_ph = ph_by_idx[0]
+                    t_ph.left = Inches(0.5)
+                    t_ph.top = Inches(0.35)
+                    t_ph.width = Inches(12.333)
+                    t_ph.height = Inches(0.7)
+                    t_ph.text = slide.title.text
+
+            # Delete any other empty placeholder so no "Click to add text" boxes remain
+            for ph in list(pptx_slide.placeholders):
+                if ph.placeholder_format.idx not in (0, 1 if is_hero_slide else -1):
+                    sp = ph._element
+                    parent = sp.getparent()
+                    if parent is not None:
+                        parent.remove(sp)
+
+            # Try rendering designed slide with safety net
+            try:
+                render_designed_slide(
+                    slide_model=slide,
+                    prs=prs,
+                    pptx_slide=pptx_slide,
+                    diagram_png=diagram_png,
+                    project_name=project_name,
+                    slide_num=i + 1,
+                    total_slides=total_slides,
+                )
+            except Exception:
+                if on_progress:
+                    try:
+                        on_progress("Design fallback")
+                    except Exception:
+                        pass
+                _render_legacy_slide_content(
+                    slide, pptx_slide, manifest, slot, diagram_png
+                )
+
+    else:
+        # Custom template or design_engine disabled: follow layouts and slots
+        total_slides = len(slides_to_render)
+        project_name = getattr(deck, "project_id", "") or "PROJECT DECK"
+
+        for i, slide in enumerate(slides_to_render):
+            st_key = slide.type.value
+            layout_idx = manifest.layout_map[st_key]
+            slide_layout = prs.slide_layouts[layout_idx]
+            pptx_slide = prs.slides.add_slide(slide_layout)
+            slot = manifest.slots.get(st_key)
+            ph_by_idx = {
+                ph.placeholder_format.idx: ph for ph in pptx_slide.placeholders
+            }
+
+            if slot:
+                # Title text into title_idx
+                if slot.title_idx is not None and slot.title_idx in ph_by_idx:
+                    title_ph = ph_by_idx[slot.title_idx]
+                    if title_ph.has_text_frame:
+                        title_ph.text_frame.text = slide.title.text
+
+                # Subtitle into subtitle_idx
+                if (
+                    slide.subtitle is not None
+                    and slot.subtitle_idx is not None
+                    and slot.subtitle_idx in ph_by_idx
+                ):
+                    sub_ph = ph_by_idx[slot.subtitle_idx]
+                    if sub_ph.has_text_frame:
+                        sub_ph.text_frame.text = slide.subtitle.text
+
+            # For uploaded custom template: draw designed blocks inside body placeholder box
+            drawn_custom = False
+            if (
+                use_design_engine
+                and slot
+                and slot.body_idx is not None
+                and slot.body_idx in ph_by_idx
+            ):
+                body_ph = ph_by_idx[slot.body_idx]
+                body_rect = (
+                    body_ph.left,
+                    body_ph.top,
+                    body_ph.width,
+                    body_ph.height,
+                )
+                # Remove empty body placeholder
+                sp = body_ph._element
                 parent = sp.getparent()
                 if parent is not None:
                     parent.remove(sp)
+
+                try:
+                    render_designed_slide(
+                        slide_model=slide,
+                        prs=prs,
+                        pptx_slide=pptx_slide,
+                        diagram_png=diagram_png,
+                        project_name=project_name,
+                        slide_num=i + 1,
+                        total_slides=total_slides,
+                        custom_body_rect=body_rect,
+                    )
+                    drawn_custom = True
+                except Exception:
+                    if on_progress:
+                        try:
+                            on_progress("Design fallback")
+                        except Exception:
+                            pass
+
+            if not drawn_custom:
+                _render_legacy_slide_content(
+                    slide, pptx_slide, manifest, slot, diagram_png
+                )
 
     prs.save(str(out_file))

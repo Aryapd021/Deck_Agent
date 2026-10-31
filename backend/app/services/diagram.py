@@ -76,41 +76,139 @@ def _escape_dot_label(text: str) -> str:
     return escaped
 
 
-def _format_node(dot_id: str, node: Node, palette: dict[str, str]) -> str:
+MODERN_KIND_COLORS: dict[str, str] = {
+    "frontend": "#006FC0",  # blue
+    "backend": "#6B4FA0",   # purple
+    "db": "#1A9C8F",        # teal
+    "ai": "#F28C28",        # orange
+    "external": "#D9A441",  # gold
+    "infra": "#6B7280",     # gray
+}
+
+
+def _format_node(
+    dot_id: str,
+    node: Node,
+    palette: dict[str, str],
+    modern: bool = False,
+) -> str:
     kind_str = node.kind.value if hasattr(node.kind, "value") else str(node.kind).lower()
-    shape, style = KIND_STYLES.get(kind_str, ("box", "filled"))
-    color_key = KIND_PALETTE_KEYS.get(kind_str, "primary")
-    fillcolor = palette.get(color_key, DEFAULT_PALETTE.get(color_key, "#2563EB"))
+    if not modern:
+        shape, style = KIND_STYLES.get(kind_str, ("box", "filled"))
+        color_key = KIND_PALETTE_KEYS.get(kind_str, "primary")
+        fillcolor = palette.get(color_key, DEFAULT_PALETTE.get(color_key, "#2563EB"))
+        fontcolor = get_font_color(fillcolor)
+        escaped_label = _escape_dot_label(node.label)
+        return (
+            f'{dot_id} [label="{escaped_label}", shape="{shape}", style="{style}", '
+            f'fillcolor="{fillcolor}", fontcolor="{fontcolor}"];'
+        )
+
+    # Modern node styling: rounded+filled, HTML-like labels with small uppercase kind tag
+    fillcolor = MODERN_KIND_COLORS.get(kind_str, palette.get("primary", "#006FC0"))
     fontcolor = get_font_color(fillcolor)
-    escaped_label = _escape_dot_label(node.label)
+    import html as py_html
+    escaped_label = py_html.escape(node.label).replace("\n", "<br/>")
+    kind_tag = kind_str.upper()
+    style = "rounded,dashed,filled" if kind_str == "external" else "rounded,filled"
+
+    label_html = (
+        f'<<table border="0" cellborder="0" cellpadding="3" cellspacing="0">'
+        f'<tr><td><font point-size="8" color="#E0E7FF"><b>{kind_tag}</b></font></td></tr>'
+        f'<tr><td><font point-size="11" color="{fontcolor}"><b>{escaped_label}</b></font></td></tr>'
+        f'</table>>'
+    )
     return (
-        f'{dot_id} [label="{escaped_label}", shape="{shape}", style="{style}", '
-        f'fillcolor="{fillcolor}", fontcolor="{fontcolor}"];'
+        f'{dot_id} [label={label_html}, shape="box", style="{style}", '
+        f'fillcolor="{fillcolor}", color="{fillcolor}", penwidth=1.2];'
     )
 
 
-def build_dot(graph: ComponentGraph, palette: dict[str, str]) -> str:
+def build_dot(
+    graph: ComponentGraph,
+    palette: dict[str, str],
+    modern: bool = False,
+) -> str:
     """Builds Graphviz DOT string for the component graph using the given palette."""
-    bg_color = palette.get("background", DEFAULT_PALETTE["background"])
-    text_color = palette.get("text", DEFAULT_PALETTE["text"])
-    accent_color = palette.get("accent", DEFAULT_PALETTE["accent"])
+    if not modern:
+        bg_color = palette.get("background", DEFAULT_PALETTE["background"])
+        text_color = palette.get("text", DEFAULT_PALETTE["text"])
+        accent_color = palette.get("accent", DEFAULT_PALETTE["accent"])
 
-    lines: list[str] = [
+        lines: list[str] = [
+            "digraph G {",
+            "    rankdir=LR;",
+            "    dpi=200;",
+            "    pad=0.3;",
+            "    nodesep=0.5;",
+            "    ranksep=0.8;",
+            f'    bgcolor="{bg_color}";',
+            '    node [fontname="Helvetica", fontsize=10];',
+            f'    edge [fontname="Helvetica", fontsize=9, color="{text_color}"];',
+        ]
+
+        id_to_dot: dict[str, str] = {node.id: f"n{i}" for i, node in enumerate(graph.nodes)}
+
+        groups: dict[str, list[tuple[str, Node]]] = {}
+        ungrouped: list[tuple[str, Node]] = []
+
+        for i, node in enumerate(graph.nodes):
+            dot_id = f"n{i}"
+            group_name = (node.group or "").strip()
+            if group_name:
+                if group_name not in groups:
+                    groups[group_name] = []
+                groups[group_name].append((dot_id, node))
+            else:
+                ungrouped.append((dot_id, node))
+
+        # Render groups as cluster subgraphs
+        for c_idx, (group_name, members) in enumerate(groups.items()):
+            lines.append(f"    subgraph cluster_{c_idx} {{")
+            escaped_group = _escape_dot_label(group_name)
+            lines.append(f'        label="{escaped_group}";')
+            lines.append('        style="rounded,dashed";')
+            lines.append(f'        color="{accent_color}";')
+            lines.append(f'        fontcolor="{text_color}";')
+            for dot_id, node in members:
+                lines.append(f"        {_format_node(dot_id, node, palette, modern=False)}")
+            lines.append("    }")
+
+        # Render ungrouped nodes
+        for dot_id, node in ungrouped:
+            lines.append(f"    {_format_node(dot_id, node, palette, modern=False)}")
+
+        # Render edges
+        for edge in graph.edges:
+            from_dot = id_to_dot.get(edge.from_)
+            to_dot = id_to_dot.get(edge.to)
+            if from_dot and to_dot:
+                if edge.label and edge.label.strip():
+                    escaped_edge = _escape_dot_label(edge.label.strip())
+                    lines.append(f'    {from_dot} -> {to_dot} [label="{escaped_edge}"];')
+                else:
+                    lines.append(f"    {from_dot} -> {to_dot};")
+
+        lines.append("}")
+        return "\n".join(lines)
+
+    # --- Modern Layout Engine ---
+    lines = [
         "digraph G {",
         "    rankdir=LR;",
-        "    dpi=200;",
-        "    pad=0.3;",
+        "    dpi=220;",
+        "    pad=0.4;",
         "    nodesep=0.5;",
-        "    ranksep=0.8;",
-        f'    bgcolor="{bg_color}";',
-        '    node [fontname="Helvetica", fontsize=10];',
-        f'    edge [fontname="Helvetica", fontsize=9, color="{text_color}"];',
+        "    ranksep=0.9;",
+        '    bgcolor="transparent";',
+        '    node [fontname="Arial", fontsize=10];',
+        '    edge [fontname="Arial", fontsize=9, color="#9CA3AF", penwidth=1.6, arrowsize=0.7];',
     ]
 
-    id_to_dot: dict[str, str] = {node.id: f"n{i}" for i, node in enumerate(graph.nodes)}
+    id_to_dot = {node.id: f"n{i}" for i, node in enumerate(graph.nodes)}
 
-    groups: dict[str, list[tuple[str, Node]]] = {}
-    ungrouped: list[tuple[str, Node]] = []
+    groups = {}
+    ungrouped = []
 
     for i, node in enumerate(graph.nodes):
         dot_id = f"n{i}"
@@ -122,23 +220,40 @@ def build_dot(graph: ComponentGraph, palette: dict[str, str]) -> str:
         else:
             ungrouped.append((dot_id, node))
 
-    # Render groups as cluster subgraphs
+    # Render groups as soft tinted rounded cluster subgraphs
     for c_idx, (group_name, members) in enumerate(groups.items()):
         lines.append(f"    subgraph cluster_{c_idx} {{")
         escaped_group = _escape_dot_label(group_name)
         lines.append(f'        label="{escaped_group}";')
-        lines.append('        style="rounded,dashed";')
-        lines.append(f'        color="{accent_color}";')
-        lines.append(f'        fontcolor="{text_color}";')
+        lines.append('        style="rounded,filled";')
+        lines.append('        fillcolor="#F6F7F9";')
+        lines.append('        color="#E5E7EB";')
+        lines.append('        fontcolor="#1F2937";')
+        lines.append('        fontname="Arial";')
+        lines.append('        fontsize=10;')
         for dot_id, node in members:
-            lines.append(f"        {_format_node(dot_id, node, palette)}")
+            lines.append(f"        {_format_node(dot_id, node, palette, modern=True)}")
         lines.append("    }")
 
     # Render ungrouped nodes
     for dot_id, node in ungrouped:
-        lines.append(f"    {_format_node(dot_id, node, palette)}")
+        lines.append(f"    {_format_node(dot_id, node, palette, modern=True)}")
 
-    # Render edges
+    # Ordered ranks: frontend -> backend -> data/ai/external -> infra
+    fe_nodes = [f"n{i}" for i, n in enumerate(graph.nodes) if (n.kind.value if hasattr(n.kind, "value") else str(n.kind).lower()) == "frontend"]
+    be_nodes = [f"n{i}" for i, n in enumerate(graph.nodes) if (n.kind.value if hasattr(n.kind, "value") else str(n.kind).lower()) == "backend"]
+    mid_nodes = [f"n{i}" for i, n in enumerate(graph.nodes) if (n.kind.value if hasattr(n.kind, "value") else str(n.kind).lower()) in ("db", "ai", "external")]
+    infra_nodes = [f"n{i}" for i, n in enumerate(graph.nodes) if (n.kind.value if hasattr(n.kind, "value") else str(n.kind).lower()) == "infra"]
+    if fe_nodes:
+        lines.append(f"    {{ rank=same; {' '.join(fe_nodes)} }}")
+    if be_nodes:
+        lines.append(f"    {{ rank=same; {' '.join(be_nodes)} }}")
+    if mid_nodes:
+        lines.append(f"    {{ rank=same; {' '.join(mid_nodes)} }}")
+    if infra_nodes:
+        lines.append(f"    {{ rank=same; {' '.join(infra_nodes)} }}")
+
+    # Render edges with gray 1.6pt and small arrowheads
     for edge in graph.edges:
         from_dot = id_to_dot.get(edge.from_)
         to_dot = id_to_dot.get(edge.to)
@@ -157,8 +272,16 @@ def render_diagram(
     graph: ComponentGraph,
     palette: dict[str, str],
     out_dir: Path,
+    modern: bool | None = None,
 ) -> tuple[Path, Path]:
     """Renders diagram.svg and diagram.png into out_dir using dot."""
+    if modern is None:
+        try:
+            from app.config import settings
+            modern = getattr(settings, "design_engine", True)
+        except Exception:
+            modern = True
+
     dot_binary = shutil.which("dot")
     if dot_binary is None:
         local_dot = (
@@ -179,7 +302,7 @@ def render_diagram(
     svg_path = out_path / "diagram.svg"
     png_path = out_path / "diagram.png"
 
-    dot_content = build_dot(graph, palette)
+    dot_content = build_dot(graph, palette, modern=modern)
 
     # Render SVG
     try:
