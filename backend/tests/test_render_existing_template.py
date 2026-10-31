@@ -12,8 +12,8 @@ from tests.test_render import make_dummy_png
 
 def test_render_with_pre_existing_template_slides(tmp_path: Path):
     # Use SIH custom template
-    template_src = Path("templates/8eb41dac11974621833969b5dd7b05af.pptx")
-    assert template_src.exists(), "SIH template missing"
+    template_src = Path(__file__).resolve().parents[2] / "templates" / "8eb41dac11974621833969b5dd7b05af.pptx"
+    assert template_src.exists(), f"SIH template missing at {template_src}"
 
     template_copy = tmp_path / "custom_template.pptx"
     template_copy.write_bytes(template_src.read_bytes())

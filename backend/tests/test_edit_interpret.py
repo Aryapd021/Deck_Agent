@@ -321,6 +321,68 @@ async def test_interpret_command_selected_slide(monkeypatch: pytest.MonkeyPatch)
 
 
 @pytest.mark.asyncio
+async def test_interpret_command_shift_slide(monkeypatch: pytest.MonkeyPatch):
+    deck = build_sample_deck("tmpl_test")
+    facts = _make_sample_facts()
+    slide3 = deck.slides[2]
+
+    canned_plan = {
+        "ops": [
+            {
+                "op": "move_slide",
+                "slide_id": slide3.id,
+                "to_index": 3,
+            }
+        ],
+        "message": "Shifted slide 3 down",
+    }
+    fake = FakeProvider([json.dumps(canned_plan)])
+    monkeypatch.setattr(llm_base, "get_provider", lambda: fake)
+
+    plan = await interpret_command("shift slide 3 down", deck, facts, None)
+    assert len(plan.ops) == 1
+    assert isinstance(plan.ops[0], MoveSlide)
+    assert plan.ops[0].slide_id == slide3.id
+    assert plan.ops[0].to_index == 3
+
+
+@pytest.mark.asyncio
+async def test_interpret_command_move_bottom_content_to_top(monkeypatch: pytest.MonkeyPatch):
+    deck = build_sample_deck("tmpl_test")
+    facts = _make_sample_facts()
+    slide = deck.slides[1]  # Problem slide with bullets
+
+    canned_plan = {
+        "ops": [
+            {
+                "op": "update_slide",
+                "slide_id": slide.id,
+                "fields": {
+                    "bullets": [
+                        {"text": "Last point moved first", "source": "chat", "evidence": None},
+                        {"text": "First point moved second", "source": "chat", "evidence": None},
+                    ]
+                },
+            }
+        ],
+        "message": "Moved bottom content to top",
+    }
+    fake = FakeProvider([json.dumps(canned_plan)])
+    monkeypatch.setattr(llm_base, "get_provider", lambda: fake)
+
+    plan = await interpret_command(
+        "move the content from the bottom of the slide to the top",
+        deck,
+        facts,
+        target_slide_id=slide.id,
+    )
+    assert len(plan.ops) == 1
+    assert isinstance(plan.ops[0], UpdateSlide)
+    assert plan.ops[0].slide_id == slide.id
+    assert len(plan.ops[0].fields.bullets) == 2
+
+
+@pytest.mark.asyncio
 async def test_live_interpret_command_if_key(monkeypatch: pytest.MonkeyPatch):
     from app.core.errors import ApiError
 
