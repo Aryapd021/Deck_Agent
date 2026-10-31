@@ -55,3 +55,16 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "detail": exc.detail,
             },
         )
+
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=500,
+            content={
+                "code": "INTERNAL_SERVER_ERROR",
+                "message": str(exc) or "An internal server error occurred",
+                "detail": {"type": type(exc).__name__},
+            },
+        )

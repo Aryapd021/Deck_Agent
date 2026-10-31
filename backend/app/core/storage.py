@@ -68,12 +68,22 @@ def slide_png_path(dir: Path, k: int) -> Path:
 
 def template_pptx_path(tid: str) -> Path:
     validate_id(tid, "template_id")
-    return get_settings().templates_dir / f"{tid}.pptx"
+    p = get_settings().templates_dir / f"{tid}.pptx"
+    if not p.exists():
+        fallback = get_settings().repo_root / "templates" / f"{tid}.pptx"
+        if fallback.exists():
+            return fallback
+    return p
 
 
 def template_manifest_path(tid: str) -> Path:
     validate_id(tid, "template_id")
-    return get_settings().templates_dir / f"{tid}.manifest.json"
+    p = get_settings().templates_dir / f"{tid}.manifest.json"
+    if not p.exists():
+        fallback = get_settings().repo_root / "templates" / f"{tid}.manifest.json"
+        if fallback.exists():
+            return fallback
+    return p
 
 
 def rel_to_storage(path: Path | str) -> str:

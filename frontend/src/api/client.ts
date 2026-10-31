@@ -106,9 +106,11 @@ async function request<T>(
       message?: string;
       detail?: Record<string, unknown> | null;
     } | null = null;
+    let rawText = "";
 
     try {
-      errorData = (await response.json()) as {
+      rawText = await response.text();
+      errorData = JSON.parse(rawText) as {
         code?: string;
         message?: string;
         detail?: Record<string, unknown> | null;
@@ -125,9 +127,13 @@ async function request<T>(
       throw new ApiError(errorData.code, errorData.message, errorData.detail ?? null);
     }
 
+    const errorMsg = rawText.trim()
+      ? `HTTP ${response.status}: ${rawText.trim()}`
+      : `HTTP ${response.status}: ${response.statusText || "Server Error"}`;
+
     throw new ApiError(
       "NETWORK",
-      `HTTP ${response.status}: ${response.statusText}`,
+      errorMsg,
       null,
     );
   }

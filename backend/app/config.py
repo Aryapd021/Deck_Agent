@@ -53,9 +53,22 @@ class Settings(BaseSettings):
     @field_validator("storage_dir", mode="after")
     @classmethod
     def _resolve_storage_dir(cls, v: Path) -> Path:
-        if not v.is_absolute():
-            return (REPO_ROOT / v).resolve()
-        return v.resolve()
+        if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+            tmp_storage = Path("/tmp/storage")
+            tmp_storage.mkdir(parents=True, exist_ok=True)
+            return tmp_storage
+
+        resolved = (REPO_ROOT / v).resolve() if not v.is_absolute() else v.resolve()
+        try:
+            resolved.mkdir(parents=True, exist_ok=True)
+            test_file = resolved / ".write_test"
+            test_file.touch()
+            test_file.unlink()
+            return resolved
+        except OSError:
+            tmp_storage = Path("/tmp/storage")
+            tmp_storage.mkdir(parents=True, exist_ok=True)
+            return tmp_storage
 
     @property
     def repo_root(self) -> Path:
@@ -63,6 +76,10 @@ class Settings(BaseSettings):
 
     @property
     def templates_dir(self) -> Path:
+        if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+            p = self.storage_dir / "templates"
+            p.mkdir(parents=True, exist_ok=True)
+            return p
         return REPO_ROOT / "templates"
 
     @property

@@ -48,7 +48,12 @@ async def create_project(
 ) -> ProjectOut:
     template = session.get(TemplateRow, req.template_id)
     if not template:
-        raise ApiError(ErrorCode.NOT_FOUND, f"Template {req.template_id} not found")
+        default_tmpl = session.exec(select(TemplateRow)).first()
+        if default_tmpl:
+            template = default_tmpl
+            req.template_id = default_tmpl.id
+        else:
+            raise ApiError(ErrorCode.NOT_FOUND, f"Template {req.template_id} not found")
 
     repo_ref = (req.repo_url or req.repo_path or "").strip()
     project_id = uuid4().hex

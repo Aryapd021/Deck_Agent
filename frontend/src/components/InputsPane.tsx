@@ -101,7 +101,7 @@ export function InputsPane({
       templateId ||
       (templates && templates.length > 0
         ? templates[0].id
-        : "2230629ce0fd47bfabc752ea90b200a5");
+        : "default");
 
     setIsSubmitting(true);
     try {

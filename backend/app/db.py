@@ -40,6 +40,41 @@ def init_db() -> None:
         pass
     SQLModel.metadata.create_all(get_engine())
 
+    # Seed default templates if database table is empty
+    import json
+    from datetime import datetime, timezone
+    from sqlmodel import select, func
+    from app.models.tables import TemplateRow
+
+    with Session(get_engine()) as session:
+        try:
+            count = session.exec(select(func.count(TemplateRow.id))).one()
+            if count == 0:
+                bundled_dir = settings.repo_root / "templates"
+                if bundled_dir.exists():
+                    for pptx_file in bundled_dir.glob("*.pptx"):
+                        tid = pptx_file.stem
+                        m_file = bundled_dir / f"{tid}.manifest.json"
+                        name = "Default Template" if any(k in tid.lower() for k in ("default", "tmpl_1")) else tid
+                        m_json = "{}"
+                        if m_file.exists():
+                            try:
+                                m_json = m_file.read_text(encoding="utf-8")
+                                m_obj = json.loads(m_json)
+                                name = m_obj.get("name", name)
+                            except Exception:
+                                pass
+                        row = TemplateRow(
+                            id=tid,
+                            name=name,
+                            manifest_json=m_json,
+                            created_at=datetime.now(timezone.utc),
+                        )
+                        session.add(row)
+                    session.commit()
+        except Exception:
+            session.rollback()
+
 
 def get_session() -> Generator[Session, None, None]:
     with Session(get_engine()) as session:
