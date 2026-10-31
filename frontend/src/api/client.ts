@@ -398,6 +398,10 @@ export function useJobEvents(
       if (!isTerminated) {
         source.close();
         setError("SSE connection closed or error");
+        const targetPid = projectId ?? getStoredProjectId();
+        if (targetPid) {
+          setStoredJobId(targetPid, null);
+        }
       }
     };
 
