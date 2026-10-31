@@ -54,46 +54,274 @@ def place_grid(
     policy: str = "auto",
     gap_x: int = 0,
     gap_y: int = 0,
+    slide_width: int | None = None,
 ) -> list[Box]:
-    """Generates n sub-boxes positioned in a grid within box.
-    Columns are chosen from box aspect ratio and policy.
+    """Generates n sub-boxes positioned in a 12-column grid within box.
+    Margins: 4% of slide width left/right.
+    Gutter between columns: 1.8% of width.
+    Cards snap to columns:
+      1 card: 12 cols (span 12), capped height
+      2 cards: 6 cols each
+      3 cards: 4 cols each
+      4 cards: 3 cols each (or 2x2 with 6 cols each)
+      6 cards: 2 cols each (or 2x3 with 4 cols each)
     """
     if n <= 0:
         return []
-    if n == 1:
-        return [Box(box.left, box.top, box.width, box.height)]
+
+    ref_w = slide_width if slide_width else box.width
+    gutter = gap_x if gap_x > 0 else int(ref_w * 0.018)
+    v_gap = gap_y if gap_y > 0 else int(box.height * 0.035)
+
+    # 12 columns: box.width = 12 * col_w + 11 * gutter
+    col_w = max(1, (box.width - 11 * gutter) // 12)
+
+    def col_box(col_idx: int, span: int, row_top: int, row_h: int) -> Box:
+        c_left = box.left + col_idx * (col_w + gutter)
+        c_width = (box.right - c_left) if col_idx + span == 12 else (span * col_w + (span - 1) * gutter)
+        return Box(c_left, row_top, c_width, row_h)
 
     ar = box.aspect_ratio
-    if policy == "horizontal" or (policy == "auto" and ar >= 1.5 and n <= 5):
-        cols = n
-        rows = 1
-    elif policy == "vertical" or (policy == "auto" and ar < 0.9):
-        cols = 1
-        rows = n
-    else:
-        if n == 2:
-            cols = 2 if ar >= 1.0 else 1
-        elif n == 3:
-            cols = 3 if ar >= 1.3 else 1
-        elif n == 4:
-            cols = 2 if ar < 1.9 else 4
-        elif n in (5, 6):
-            cols = 3 if ar >= 1.1 else 2
+
+    if policy == "vertical" or (policy == "auto" and ar < 0.9):
+        # Vertical stacking: cards span 12 cols
+        if n == 1:
+            h = min(box.height, int(box.height * 0.45))
+            top = box.top + int((box.height - h) / 2)
+            return [col_box(0, 12, top, h)]
+
+        row_h = (box.height - v_gap * (n - 1)) // n
+        return [
+            col_box(0, 12, box.top + i * (row_h + v_gap), row_h)
+            for i in range(n)
+        ]
+
+    # Horizontal or grid snapping
+    if n == 1:
+        # Never span whole 5.5 inches for a single sentence
+        h = min(box.height, int(box.height * 0.50))
+        top = box.top + int((box.height - h) / 2)
+        return [col_box(0, 12, top, h)]
+
+    elif n == 2:
+        return [
+            col_box(0, 6, box.top, box.height),
+            col_box(6, 6, box.top, box.height),
+        ]
+
+    elif n == 3:
+        return [
+            col_box(0, 4, box.top, box.height),
+            col_box(4, 4, box.top, box.height),
+            col_box(8, 4, box.top, box.height),
+        ]
+
+    elif n == 4:
+        if policy == "horizontal" or (policy == "auto" and ar >= 1.9):
+            return [
+                col_box(0, 3, box.top, box.height),
+                col_box(3, 3, box.top, box.height),
+                col_box(6, 3, box.top, box.height),
+                col_box(9, 3, box.top, box.height),
+            ]
         else:
-            cols = 4 if ar >= 1.7 else 3
+            # 2x2 grid snapping to 6 cols each
+            row_h = (box.height - v_gap) // 2
+            top1 = box.top + row_h + v_gap
+            return [
+                col_box(0, 6, box.top, row_h),
+                col_box(6, 6, box.top, row_h),
+                col_box(0, 6, top1, row_h),
+                col_box(6, 6, top1, row_h),
+            ]
+
+    elif n == 5:
+        if policy == "horizontal":
+            span = 2
+            return [col_box(i * 2 + 1, span, box.top, box.height) for i in range(5)]
+        else:
+            row_h = (box.height - v_gap) // 2
+            top1 = box.top + row_h + v_gap
+            return [
+                col_box(0, 4, box.top, row_h),
+                col_box(4, 4, box.top, row_h),
+                col_box(8, 4, box.top, row_h),
+                col_box(0, 6, top1, row_h),
+                col_box(6, 6, top1, row_h),
+            ]
+
+    elif n == 6:
+        if policy == "horizontal":
+            return [col_box(i * 2, 2, box.top, box.height) for i in range(6)]
+        else:
+            row_h = (box.height - v_gap) // 2
+            top1 = box.top + row_h + v_gap
+            return [
+                col_box(0, 4, box.top, row_h),
+                col_box(4, 4, box.top, row_h),
+                col_box(8, 4, box.top, row_h),
+                col_box(0, 4, top1, row_h),
+                col_box(4, 4, top1, row_h),
+                col_box(8, 4, top1, row_h),
+            ]
+
+    else:
+        cols = 4 if ar >= 1.7 else 3
+        span = 12 // cols
         rows = math.ceil(n / cols)
+        row_h = (box.height - v_gap * (rows - 1)) // rows
+        boxes = []
+        for i in range(n):
+            r = i // cols
+            c = i % cols
+            boxes.append(col_box(c * span, span, box.top + r * (row_h + v_gap), row_h))
+        return boxes
 
-    cell_w = int((box.width - gap_x * (cols - 1)) / cols)
-    cell_h = int((box.height - gap_y * (rows - 1)) / rows)
 
-    boxes: list[Box] = []
-    for i in range(n):
-        r = i // cols
-        c = i % cols
-        bx = box.left + c * (cell_w + gap_x)
-        by = box.top + r * (cell_h + gap_y)
-        boxes.append(Box(bx, by, cell_w, cell_h))
-    return boxes
+@dataclass
+class SlideBands:
+    summary_box: Box | None
+    main_box: Box
+    secondary_box: Box | None
+    takeaway_box: Box | None
+
+
+def compute_slide_bands(
+    box: Box,
+    has_summary: bool = False,
+    has_takeaway: bool = False,
+    has_secondary: bool = False,
+) -> SlideBands:
+    gap = int(box.height * 0.02)
+    cur_y = box.top
+
+    summary_box = None
+    if has_summary:
+        s_h = int(box.height * 0.12)
+        summary_box = Box(box.left, cur_y, box.width, s_h)
+        cur_y += s_h + gap
+
+    takeaway_box = None
+    takeaway_h = int(box.height * 0.10) if has_takeaway else 0
+    if has_takeaway:
+        takeaway_top = box.bottom - takeaway_h
+        takeaway_box = Box(box.left, takeaway_top, box.width, takeaway_h)
+        avail_bottom = takeaway_top - gap
+    else:
+        avail_bottom = box.bottom
+
+    avail_h = avail_bottom - cur_y
+    if has_secondary:
+        main_h = int(avail_h * 0.60)
+        main_box = Box(box.left, cur_y, box.width, main_h)
+        sec_top = cur_y + main_h + gap
+        sec_h = avail_bottom - sec_top
+        secondary_box = Box(box.left, sec_top, box.width, sec_h)
+    else:
+        main_box = Box(box.left, cur_y, box.width, avail_h)
+        secondary_box = None
+
+    return SlideBands(
+        summary_box=summary_box,
+        main_box=main_box,
+        secondary_box=secondary_box,
+        takeaway_box=takeaway_box,
+    )
+
+
+def send_to_back(slide: PptxSlide, shape: Any) -> None:
+    """Moves shape element to the back (just after nvGrpSpPr and grpSpPr)."""
+    try:
+        spTree = slide.shapes._spTree
+        el = shape._element
+        if el in spTree:
+            spTree.remove(el)
+            spTree.insert(2, el)
+    except Exception:
+        pass
+
+
+def bring_to_front(slide: PptxSlide, shape: Any) -> None:
+    """Moves shape element to the very top z-order (end of spTree)."""
+    try:
+        spTree = slide.shapes._spTree
+        el = shape._element
+        if el in spTree:
+            spTree.remove(el)
+            spTree.append(el)
+    except Exception:
+        pass
+
+
+def ensure_titles_on_top(slide: PptxSlide) -> None:
+    """Ensures all title placeholders and header shapes are at the top z-order."""
+    try:
+        spTree = slide.shapes._spTree
+        for sh in list(slide.shapes):
+            is_title = False
+            if sh.is_placeholder and sh.placeholder_format.idx in (0, 1):
+                is_title = True
+            elif getattr(sh, "name", "").lower().startswith("title"):
+                is_title = True
+            if is_title and sh._element in spTree:
+                spTree.remove(sh._element)
+                spTree.append(sh._element)
+    except Exception:
+        pass
+
+
+def get_real_pill_label(b: Any, slide_type: str = "", index: int = 1) -> str:
+    """Derives a meaningful domain pill label from item heading or content, never generic 'FEATURE 1' or 'STACK'."""
+    # 1. Check explicit heading attribute if present
+    if hasattr(b, "heading") and b.heading and b.heading.strip():
+        h = b.heading.strip()
+        if len(h) <= 24:
+            return h.upper()
+        return h[:22].upper() + "…"
+
+    # 2. Extract leading phrase before colon, dash, period
+    text = getattr(b, "text", "") if hasattr(b, "text") else str(b)
+    heading_cand, _ = split_heading_body(text)
+    if heading_cand and len(heading_cand) <= 24 and len(heading_cand.split()) <= 4:
+        clean = heading_cand.strip()
+        if clean.lower() not in ("feature", "note", "step", "stack", "bullet", "item"):
+            return clean.upper()
+
+    # 3. Known technology / architectural domain keywords
+    words = re.findall(r"[A-Za-z0-9+#.-]+", text)
+    tech_keywords = {
+        "react", "vite", "vue", "nextjs", "angular", "tailwind", "fastapi", "python",
+        "django", "flask", "postgres", "postgresql", "sqlite", "mongodb", "redis",
+        "docker", "kubernetes", "aws", "gcp", "azure", "openai", "claude", "gemini",
+        "llm", "graphql", "rest", "grpc", "node", "typescript", "architecture",
+        "database", "frontend", "backend", "security", "auth", "testing", "ci/cd",
+        "cache", "queue", "pipeline", "agent", "memory", "schema", "storage"
+    }
+    for w in words:
+        if w.lower() in tech_keywords:
+            return w.upper()
+
+    # 4. First 2-3 capitalized or substantive words
+    if words:
+        first_few = [w for w in words[:3] if len(w) > 2 and w.lower() not in ("this", "that", "with", "from", "using", "your", "have")]
+        if first_few:
+            cand = " ".join(first_few[:2]).upper()
+            if len(cand) <= 22:
+                return cand
+
+    # 5. Meaningful domain category based on slide recipe
+    type_map = {
+        "problem": "CHALLENGE",
+        "solution": "CAPABILITY",
+        "features": "CORE ENGINE",
+        "architecture": "COMPONENT",
+        "tech_stack": "INFRASTRUCTURE",
+        "impact": "METRIC",
+        "roadmap": "MILESTONE",
+        "closing": "SUMMARY",
+    }
+    base = type_map.get(slide_type, "CORE")
+    return f"{base} {index}"
 
 
 # --- COLOR HELPERS & CONTRAST ---
@@ -611,6 +839,7 @@ def render_title_slide(
     left_panel.fill.solid()
     left_panel.fill.fore_color.rgb = hex_to_rgb(tokens.primary)
     left_panel.line.fill.background()
+    send_to_back(slide, left_panel)
 
     # Pill
     pill_w = int(left_w * 0.35)
@@ -712,6 +941,7 @@ def render_title_slide(
     right_bg.fill.solid()
     right_bg.fill.fore_color.rgb = hex_to_rgb(tokens.panel_fills[4] if len(tokens.panel_fills) > 4 else tokens.bg_color)
     right_bg.line.fill.background()
+    send_to_back(slide, right_bg)
 
     # Decorative shapes inside right panel
     r1_w = int(right_w * 0.70)
@@ -742,6 +972,12 @@ def render_title_slide(
     c1.fill.fore_color.rgb = hex_to_rgb(tokens.tertiary)
     c1.line.fill.background()
     add_soft_shadow(c1)
+
+    # Guarantee title placeholders stay on top of background panels
+    if title_ph:
+        bring_to_front(slide, title_ph)
+    if sub_ph:
+        bring_to_front(slide, sub_ph)
 
 
 def render_problem_slide(
@@ -960,16 +1196,17 @@ def render_features_slide(
 
         add_card(slide, cb, panel_color=panel, accent_color=accent, dashed=is_ni, top_bar=True, tokens=tokens)
 
+        pill_label = get_real_pill_label(b, "features", i + 1)
         is_wide = (cb.aspect_ratio >= 2.2)
         if is_wide:
-            pill_w = max(int(cb.width * 0.18), 450000)
+            pill_w = max(int(cb.width * 0.24), 500000)
             pill_h = max(int(cb.height * 0.45), 180000)
             pill_l = cb.left + tokens.padding
             pill_t = cb.top + int((cb.height - pill_h) / 2)
             add_pill(
                 slide,
                 Box(pill_l, pill_t, pill_w, pill_h),
-                f"FEATURE {i + 1}",
+                pill_label,
                 bg_color=accent,
                 text_color=tokens.bg_color,
                 tokens=tokens,
@@ -979,14 +1216,14 @@ def render_features_slide(
             tb_h = cb.height - 2 * tokens.padding
             tb = slide.shapes.add_textbox(tb_l, cb.top + tokens.padding, tb_w, tb_h)
         else:
-            pill_w = max(int(cb.width * 0.35), 450000)
+            pill_w = max(int(cb.width * 0.45), 500000)
             pill_h = max(int(cb.height * 0.16), 160000)
             pill_l = cb.left + tokens.padding
             pill_t = cb.top + tokens.padding + int(cb.height * 0.03)
             add_pill(
                 slide,
                 Box(pill_l, pill_t, pill_w, pill_h),
-                f"FEATURE {i + 1}",
+                pill_label,
                 bg_color=accent,
                 text_color=tokens.bg_color,
                 tokens=tokens,
@@ -1201,16 +1438,17 @@ def render_tech_stack_slide(
 
         add_card(slide, cb, panel_color=panel, accent_color=accent, dashed=is_ni, top_bar=True, tokens=tokens)
 
+        pill_label = get_real_pill_label(b, "tech_stack", i + 1)
         is_wide = (cb.aspect_ratio >= 2.2)
         if is_wide:
-            pill_w = max(int(cb.width * 0.18), 500000)
+            pill_w = max(int(cb.width * 0.24), 500000)
             pill_h = max(int(cb.height * 0.45), 180000)
             pill_l = cb.left + tokens.padding
             pill_t = cb.top + int((cb.height - pill_h) / 2)
             add_pill(
                 slide,
                 Box(pill_l, pill_t, pill_w, pill_h),
-                "STACK",
+                pill_label,
                 bg_color=accent,
                 text_color=tokens.bg_color,
                 tokens=tokens,
@@ -1220,14 +1458,14 @@ def render_tech_stack_slide(
             tb_h = cb.height - 2 * tokens.padding
             tb = slide.shapes.add_textbox(tb_l, cb.top + tokens.padding, tb_w, tb_h)
         else:
-            pill_w = max(int(cb.width * 0.40), 500000)
+            pill_w = max(int(cb.width * 0.45), 500000)
             pill_h = max(int(cb.height * 0.16), 160000)
             pill_l = cb.left + tokens.padding
             pill_t = cb.top + tokens.padding + int(cb.height * 0.03)
             add_pill(
                 slide,
                 Box(pill_l, pill_t, pill_w, pill_h),
-                "STACK",
+                pill_label,
                 bg_color=accent,
                 text_color=tokens.bg_color,
                 tokens=tokens,
@@ -1340,16 +1578,17 @@ def render_roadmap_slide(
 
         add_card(slide, cb, panel_color=panel, accent_color=accent, dashed=is_ni, top_bar=True, tokens=tokens)
 
+        pill_label = get_real_pill_label(b, "roadmap", i + 1)
         is_wide = (cb.aspect_ratio >= 2.2)
         if is_wide:
-            pill_w = max(int(cb.width * 0.18), 500000)
+            pill_w = max(int(cb.width * 0.24), 500000)
             pill_h = max(int(cb.height * 0.45), 180000)
             pill_l = cb.left + tokens.padding
             pill_t = cb.top + int((cb.height - pill_h) / 2)
             add_pill(
                 slide,
                 Box(pill_l, pill_t, pill_w, pill_h),
-                f"PHASE {i + 1}",
+                pill_label,
                 bg_color=accent,
                 text_color=tokens.bg_color,
                 tokens=tokens,
@@ -1366,7 +1605,7 @@ def render_roadmap_slide(
             add_pill(
                 slide,
                 Box(pill_l, pill_t, pill_w, pill_h),
-                f"PHASE {i + 1}",
+                pill_label,
                 bg_color=accent,
                 text_color=tokens.bg_color,
                 tokens=tokens,
@@ -1529,25 +1768,60 @@ def render_designed_slide(
     recipe_key = choose_recipe_for_slot(slot_title, slide_model) if slot_title else slide_model.type.value
 
     is_custom = bool(custom_body_rect is not None or (profile and profile.mode == "fill"))
+
+    has_sum = bool(getattr(slide_model, "summary", None))
+    has_take = bool(getattr(slide_model, "takeaway", None))
+    bands = compute_slide_bands(content_box, has_summary=has_sum, has_takeaway=has_take)
+
+    if bands.summary_box and getattr(slide_model, "summary", None):
+        add_card(pptx_slide, bands.summary_box, panel_color=tokens.panel_fills[0], accent_color=tokens.primary, dashed=False, top_bar=False, tokens=tokens)
+        pad = int(tokens.padding * 0.5)
+        tb_s = pptx_slide.shapes.add_textbox(bands.summary_box.left + pad, bands.summary_box.top + pad, bands.summary_box.width - 2 * pad, bands.summary_box.height - 2 * pad)
+        tf_s = tb_s.text_frame
+        tf_s.word_wrap = True
+        p_s = tf_s.paragraphs[0]
+        p_s.text = slide_model.summary.text
+        p_s.font.name = tokens.font_name
+        p_s.font.size = Pt(max(tokens.base_body_pt, 11.0))
+        p_s.font.bold = True
+        p_s.font.color.rgb = hex_to_rgb(tokens.primary)
+
+    active_box = bands.main_box if (has_sum or has_take) else content_box
+
     if recipe_key == "title":
         render_title_slide(pptx_slide, slide_model, content_box, tokens, is_custom=is_custom)
     elif recipe_key == "problem":
-        render_problem_slide(pptx_slide, slide_model, content_box, tokens, on_progress, slide_num)
+        render_problem_slide(pptx_slide, slide_model, active_box, tokens, on_progress, slide_num)
     elif recipe_key == "solution":
-        render_solution_slide(pptx_slide, slide_model, content_box, tokens, on_progress, slide_num)
+        render_solution_slide(pptx_slide, slide_model, active_box, tokens, on_progress, slide_num)
     elif recipe_key == "features":
-        render_features_slide(pptx_slide, slide_model, content_box, tokens, on_progress, slide_num)
+        render_features_slide(pptx_slide, slide_model, active_box, tokens, on_progress, slide_num)
     elif recipe_key == "architecture":
-        render_architecture_slide(pptx_slide, slide_model, content_box, tokens, diagram_png, on_progress, slide_num)
+        render_architecture_slide(pptx_slide, slide_model, active_box, tokens, diagram_png, on_progress, slide_num)
     elif recipe_key == "tech_stack":
-        render_tech_stack_slide(pptx_slide, slide_model, content_box, tokens, on_progress, slide_num)
+        render_tech_stack_slide(pptx_slide, slide_model, active_box, tokens, on_progress, slide_num)
     elif recipe_key == "demo":
-        render_demo_slide(pptx_slide, slide_model, content_box, tokens, diagram_png, on_progress, slide_num)
+        render_demo_slide(pptx_slide, slide_model, active_box, tokens, diagram_png, on_progress, slide_num)
     elif recipe_key == "impact":
-        render_impact_slide(pptx_slide, slide_model, content_box, tokens, on_progress, slide_num)
+        render_impact_slide(pptx_slide, slide_model, active_box, tokens, on_progress, slide_num)
     elif recipe_key == "roadmap":
-        render_roadmap_slide(pptx_slide, slide_model, content_box, tokens, on_progress, slide_num)
+        render_roadmap_slide(pptx_slide, slide_model, active_box, tokens, on_progress, slide_num)
     elif recipe_key == "closing":
-        render_closing_slide(pptx_slide, slide_model, content_box, tokens, on_progress, slide_num)
+        render_closing_slide(pptx_slide, slide_model, active_box, tokens, on_progress, slide_num)
     else:
-        render_features_slide(pptx_slide, slide_model, content_box, tokens, on_progress, slide_num)
+        render_features_slide(pptx_slide, slide_model, active_box, tokens, on_progress, slide_num)
+
+    if bands.takeaway_box and getattr(slide_model, "takeaway", None):
+        add_pill(
+            pptx_slide,
+            bands.takeaway_box,
+            f"KEY TAKEAWAY: {slide_model.takeaway.text}",
+            bg_color=tokens.panel_fills[1] if len(tokens.panel_fills) > 1 else tokens.panel_fills[0],
+            text_color=tokens.primary,
+            font_name=tokens.font_name,
+            font_pt=max(int(tokens.base_body_pt * 0.95), 10),
+            tokens=tokens,
+        )
+
+    # Ensure all title placeholders and header shapes are always at top z-order
+    ensure_titles_on_top(pptx_slide)
