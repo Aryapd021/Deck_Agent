@@ -51,7 +51,7 @@ export type EditRequest = {
 export type DeckPatchRequest = {
   base_version: number;
   slide_id: string;
-  target: "title" | "subtitle" | "bullet";
+  target: "title" | "subtitle" | "bullet" | "layout_style";
   bullet_index?: number | null;
   text: string;
 };

@@ -137,9 +137,37 @@ export function DeckPane({
   const [activeTab, setActiveTab] = useState<"slides" | "diagram">("slides");
   const [failedPreviews, setFailedPreviews] = useState<Record<number, boolean>>({});
   const [diagramImgFailed, setDiagramImgFailed] = useState<boolean>(false);
+  const [updatingLayoutSlideId, setUpdatingLayoutSlideId] = useState<string | null>(null);
+
+  const queryClient = useQueryClient();
+  const patchMutation = usePatchDeck();
 
   const deck = deckResp?.deck;
   const version = deckResp?.version;
+
+  async function handleSetLayoutStyle(slideId: string, style: "vertical" | "horizontal" | "auto") {
+    if (!projectId || !version || isJobRunning || patchMutation.isPending) return;
+    setUpdatingLayoutSlideId(slideId);
+    try {
+      await patchMutation.mutateAsync({
+        projectId,
+        data: {
+          base_version: version,
+          slide_id: slideId,
+          target: "layout_style",
+          text: style,
+        },
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["deck", projectId] }),
+        queryClient.invalidateQueries({ queryKey: ["versions", projectId] }),
+      ]);
+    } catch (err) {
+      console.error("Failed to update layout style:", err);
+    } finally {
+      setUpdatingLayoutSlideId(null);
+    }
+  }
 
   function renderSourceBadge(bullet: DeckBullet) {
     const src = bullet.source;
@@ -315,11 +343,60 @@ export function DeckPane({
                           {slide.type}
                         </span>
                       </div>
-                      {slide.image_ref && (
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-950/60 text-indigo-400 border border-indigo-900">
-                          image: {slide.image_ref}
-                        </span>
-                      )}
+
+                      <div className="flex items-center gap-2">
+                        {slide.bullets && slide.bullets.length > 1 && (
+                          <div
+                            className="flex items-center bg-slate-950 rounded border border-slate-800 p-0.5 text-[10px]"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              title="Stack bullet points one below the other (Vertical)"
+                              disabled={Boolean(isJobRunning) || updatingLayoutSlideId === slide.id}
+                              onClick={() => handleSetLayoutStyle(slide.id || "", "vertical")}
+                              className={`px-2 py-0.5 rounded transition font-medium flex items-center gap-1 ${
+                                slide.layout_style === "vertical"
+                                  ? "bg-indigo-600 text-white shadow-sm"
+                                  : "text-slate-400 hover:text-white"
+                              }`}
+                            >
+                              <span>↓ Below</span>
+                            </button>
+                            <button
+                              type="button"
+                              title="Place bullet points one beside another (Horizontal)"
+                              disabled={Boolean(isJobRunning) || updatingLayoutSlideId === slide.id}
+                              onClick={() => handleSetLayoutStyle(slide.id || "", "horizontal")}
+                              className={`px-2 py-0.5 rounded transition font-medium flex items-center gap-1 ${
+                                slide.layout_style === "horizontal"
+                                  ? "bg-indigo-600 text-white shadow-sm"
+                                  : "text-slate-400 hover:text-white"
+                              }`}
+                            >
+                              <span>→ Beside</span>
+                            </button>
+                            <button
+                              type="button"
+                              title="Automatic responsive layout"
+                              disabled={Boolean(isJobRunning) || updatingLayoutSlideId === slide.id}
+                              onClick={() => handleSetLayoutStyle(slide.id || "", "auto")}
+                              className={`px-1.5 py-0.5 rounded transition ${
+                                !slide.layout_style || slide.layout_style === "auto"
+                                  ? "bg-slate-800 text-slate-200"
+                                  : "text-slate-500 hover:text-slate-300"
+                              }`}
+                            >
+                              Auto
+                            </button>
+                          </div>
+                        )}
+                        {slide.image_ref && (
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-950/60 text-indigo-400 border border-indigo-900">
+                            image: {slide.image_ref}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div>

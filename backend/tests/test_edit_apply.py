@@ -420,3 +420,22 @@ def test_summarize_ops_compound_formatting():
 
     summary = summarize_ops(deck, after_deck, [op1, op2])
     assert summary == f"Slide 3: {len(slide3.bullets)} bullets to 3; moved Demo to position 6"
+
+
+@pytest.mark.asyncio
+async def test_apply_layout_style():
+    deck = build_sample_deck("tmpl_test")
+    manifest = _make_manifest()
+    facts = _make_facts()
+
+    slide = deck.slides[2]
+    op = UpdateSlide(
+        slide_id=slide.id,
+        fields=SlidePatch(layout_style="vertical"),
+    )
+    new_deck, _ = await apply_ops(deck, [op], facts, manifest)
+    target = next(s for s in new_deck.slides if s.id == slide.id)
+    assert target.layout_style == "vertical"
+
+    summary = summarize_ops(deck, new_deck, [op])
+    assert "layout changed to vertical" in summary

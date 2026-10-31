@@ -10,6 +10,7 @@ class SlidePatch(BaseModel):
     subtitle: Field | None = None
     bullets: list[Field] | None = None
     notes: str | None = None
+    layout_style: str | None = None
 
     @field_validator("bullets")
     @classmethod

@@ -756,7 +756,14 @@ def render_problem_slide(
     if not bullets:
         return
 
-    if len(bullets) == 1:
+    user_policy = getattr(slide_model, "layout_style", None)
+    if user_policy == "vertical":
+        card_boxes = place_grid(len(bullets), box, policy="vertical", gap_x=0, gap_y=tokens.gap)
+        b_list = bullets
+    elif user_policy == "horizontal":
+        card_boxes = place_grid(len(bullets), box, policy="horizontal", gap_x=tokens.gap, gap_y=0)
+        b_list = bullets
+    elif len(bullets) == 1:
         card_boxes = [box]
         b_list = bullets
     else:
@@ -816,16 +823,28 @@ def render_problem_slide(
 
         add_card(slide, cb, panel_color=panel, accent_color=accent, dashed=is_ni, top_bar=True, tokens=tokens)
 
-        badge_d = max(int(min(cb.width, cb.height) * 0.18), 240000)
-        b_badge_l = cb.left + tokens.padding
-        b_badge_t = cb.top + tokens.padding + int(cb.height * 0.04)
-        add_number_badge(slide, b_badge_l, b_badge_t, badge_d, str(i + 1), accent, tokens)
+        is_wide = (cb.aspect_ratio >= 2.2)
+        if is_wide:
+            badge_d = max(int(min(cb.width, cb.height) * 0.40), 240000)
+            b_badge_l = cb.left + tokens.padding
+            b_badge_t = cb.top + int((cb.height - badge_d) / 2)
+            add_number_badge(slide, b_badge_l, b_badge_t, badge_d, str(i + 1), accent, tokens)
 
-        tb_t = b_badge_t + badge_d + int(tokens.padding * 0.5)
-        tb_w = cb.width - 2 * tokens.padding
-        tb_h = cb.bottom - tb_t - tokens.padding
+            tb_l = b_badge_l + badge_d + tokens.padding
+            tb_w = cb.right - tb_l - tokens.padding
+            tb_h = cb.height - 2 * tokens.padding
+            tb = slide.shapes.add_textbox(tb_l, cb.top + tokens.padding, tb_w, tb_h)
+        else:
+            badge_d = max(int(min(cb.width, cb.height) * 0.18), 240000)
+            b_badge_l = cb.left + tokens.padding
+            b_badge_t = cb.top + tokens.padding + int(cb.height * 0.04)
+            add_number_badge(slide, b_badge_l, b_badge_t, badge_d, str(i + 1), accent, tokens)
 
-        tb = slide.shapes.add_textbox(cb.left + tokens.padding, tb_t, tb_w, tb_h)
+            tb_t = b_badge_t + badge_d + int(tokens.padding * 0.5)
+            tb_w = cb.width - 2 * tokens.padding
+            tb_h = cb.bottom - tb_t - tokens.padding
+            tb = slide.shapes.add_textbox(cb.left + tokens.padding, tb_t, tb_w, tb_h)
+
         tf = tb.text_frame
         populate_card_text(
             tf,
@@ -856,7 +875,11 @@ def render_solution_slide(
         return
 
     n = len(bullets)
-    policy = "horizontal" if (box.aspect_ratio >= 1.2 and n <= 4) else "auto"
+    user_policy = getattr(slide_model, "layout_style", None)
+    if user_policy in ("vertical", "horizontal"):
+        policy = user_policy
+    else:
+        policy = "horizontal" if (box.aspect_ratio >= 1.2 and n <= 4) else "auto"
     card_boxes = place_grid(n, box, policy=policy, gap_x=int(tokens.gap * 1.4), gap_y=tokens.gap)
 
     for i, (b, cb) in enumerate(zip(bullets, card_boxes, strict=False)):
@@ -866,17 +889,27 @@ def render_solution_slide(
 
         add_card(slide, cb, panel_color=panel, accent_color=accent, dashed=is_ni, top_bar=True, tokens=tokens)
 
-        # Number badge
-        badge_d = max(int(min(cb.width, cb.height) * 0.16), 240000)
-        badge_l = cb.left + tokens.padding
-        badge_t = cb.top + tokens.padding + int(cb.height * 0.03)
-        add_number_badge(slide, badge_l, badge_t, badge_d, str(i + 1), accent, tokens)
+        is_wide = (cb.aspect_ratio >= 2.2)
+        if is_wide:
+            badge_d = max(int(min(cb.width, cb.height) * 0.40), 240000)
+            badge_l = cb.left + tokens.padding
+            badge_t = cb.top + int((cb.height - badge_d) / 2)
+            add_number_badge(slide, badge_l, badge_t, badge_d, str(i + 1), accent, tokens)
 
-        tb_t = badge_t + badge_d + int(tokens.padding * 0.5)
-        tb_w = cb.width - 2 * tokens.padding
-        tb_h = cb.bottom - tb_t - tokens.padding
+            tb_l = badge_l + badge_d + tokens.padding
+            tb_w = cb.right - tb_l - tokens.padding
+            tb_h = cb.height - 2 * tokens.padding
+            tb = slide.shapes.add_textbox(tb_l, cb.top + tokens.padding, tb_w, tb_h)
+        else:
+            badge_d = max(int(min(cb.width, cb.height) * 0.16), 240000)
+            badge_l = cb.left + tokens.padding
+            badge_t = cb.top + tokens.padding + int(cb.height * 0.03)
+            add_number_badge(slide, badge_l, badge_t, badge_d, str(i + 1), accent, tokens)
 
-        tb = slide.shapes.add_textbox(cb.left + tokens.padding, tb_t, tb_w, tb_h)
+            tb_t = badge_t + badge_d + int(tokens.padding * 0.5)
+            tb_w = cb.width - 2 * tokens.padding
+            tb_h = cb.bottom - tb_t - tokens.padding
+            tb = slide.shapes.add_textbox(cb.left + tokens.padding, tb_t, tb_w, tb_h)
         tf = tb.text_frame
         populate_card_text(
             tf,
@@ -916,7 +949,9 @@ def render_features_slide(
         return
 
     n = len(bullets)
-    card_boxes = place_grid(n, box, policy="auto", gap_x=tokens.gap, gap_y=tokens.gap)
+    user_policy = getattr(slide_model, "layout_style", None)
+    policy = user_policy if user_policy in ("vertical", "horizontal") else "auto"
+    card_boxes = place_grid(n, box, policy=policy, gap_x=tokens.gap, gap_y=tokens.gap)
 
     for i, (b, cb) in enumerate(zip(bullets, card_boxes, strict=False)):
         is_ni = (b.source == Source.NEEDS_INPUT)
@@ -925,24 +960,41 @@ def render_features_slide(
 
         add_card(slide, cb, panel_color=panel, accent_color=accent, dashed=is_ni, top_bar=True, tokens=tokens)
 
-        pill_w = max(int(cb.width * 0.35), 450000)
-        pill_h = max(int(cb.height * 0.16), 160000)
-        pill_l = cb.left + tokens.padding
-        pill_t = cb.top + tokens.padding + int(cb.height * 0.03)
-        add_pill(
-            slide,
-            Box(pill_l, pill_t, pill_w, pill_h),
-            f"FEATURE {i + 1}",
-            bg_color=accent,
-            text_color=tokens.bg_color,
-            tokens=tokens,
-        )
-
-        tb_t = pill_t + pill_h + int(tokens.padding * 0.4)
-        tb_w = cb.width - 2 * tokens.padding
-        tb_h = cb.bottom - tb_t - tokens.padding
-
-        tb = slide.shapes.add_textbox(cb.left + tokens.padding, tb_t, tb_w, tb_h)
+        is_wide = (cb.aspect_ratio >= 2.2)
+        if is_wide:
+            pill_w = max(int(cb.width * 0.18), 450000)
+            pill_h = max(int(cb.height * 0.45), 180000)
+            pill_l = cb.left + tokens.padding
+            pill_t = cb.top + int((cb.height - pill_h) / 2)
+            add_pill(
+                slide,
+                Box(pill_l, pill_t, pill_w, pill_h),
+                f"FEATURE {i + 1}",
+                bg_color=accent,
+                text_color=tokens.bg_color,
+                tokens=tokens,
+            )
+            tb_l = pill_l + pill_w + tokens.padding
+            tb_w = cb.right - tb_l - tokens.padding
+            tb_h = cb.height - 2 * tokens.padding
+            tb = slide.shapes.add_textbox(tb_l, cb.top + tokens.padding, tb_w, tb_h)
+        else:
+            pill_w = max(int(cb.width * 0.35), 450000)
+            pill_h = max(int(cb.height * 0.16), 160000)
+            pill_l = cb.left + tokens.padding
+            pill_t = cb.top + tokens.padding + int(cb.height * 0.03)
+            add_pill(
+                slide,
+                Box(pill_l, pill_t, pill_w, pill_h),
+                f"FEATURE {i + 1}",
+                bg_color=accent,
+                text_color=tokens.bg_color,
+                tokens=tokens,
+            )
+            tb_t = pill_t + pill_h + int(tokens.padding * 0.4)
+            tb_w = cb.width - 2 * tokens.padding
+            tb_h = cb.bottom - tb_t - tokens.padding
+            tb = slide.shapes.add_textbox(cb.left + tokens.padding, tb_t, tb_w, tb_h)
         tf = tb.text_frame
         populate_card_text(
             tf,
@@ -983,7 +1035,9 @@ def render_architecture_slide(
         right_box = None
 
     if bullets:
-        card_boxes = place_grid(len(bullets), left_box, policy="vertical", gap_x=0, gap_y=tokens.gap)
+        user_policy = getattr(slide_model, "layout_style", None)
+        policy = user_policy if user_policy in ("vertical", "horizontal") else "vertical"
+        card_boxes = place_grid(len(bullets), left_box, policy=policy, gap_x=tokens.gap if policy == "horizontal" else 0, gap_y=tokens.gap)
         for i, (b, cb) in enumerate(zip(bullets, card_boxes, strict=False)):
             is_ni = (b.source == Source.NEEDS_INPUT)
             accent = tokens.accents[i % len(tokens.accents)]
@@ -991,13 +1045,24 @@ def render_architecture_slide(
 
             add_card(slide, cb, panel_color=panel, accent_color=accent, dashed=is_ni, top_bar=False, tokens=tokens)
 
-            badge_d = max(int(min(cb.width, cb.height) * 0.22), 220000)
-            add_number_badge(slide, cb.left + tokens.padding, cb.top + tokens.padding, badge_d, str(i + 1), accent, tokens)
+            is_wide = (cb.aspect_ratio >= 1.6)
+            if is_wide:
+                badge_d = max(int(min(cb.width, cb.height) * 0.40), 220000)
+                add_number_badge(slide, cb.left + tokens.padding, cb.top + int((cb.height - badge_d) / 2), badge_d, str(i + 1), accent, tokens)
 
-            tb_l = cb.left + tokens.padding + badge_d + tokens.padding
-            tb_w = cb.right - tb_l - tokens.padding
-            tb_h = cb.height - 2 * tokens.padding
-            tb = slide.shapes.add_textbox(tb_l, cb.top + tokens.padding, tb_w, tb_h)
+                tb_l = cb.left + tokens.padding + badge_d + tokens.padding
+                tb_w = cb.right - tb_l - tokens.padding
+                tb_h = cb.height - 2 * tokens.padding
+                tb = slide.shapes.add_textbox(tb_l, cb.top + tokens.padding, tb_w, tb_h)
+            else:
+                badge_d = max(int(min(cb.width, cb.height) * 0.18), 220000)
+                add_number_badge(slide, cb.left + tokens.padding, cb.top + tokens.padding + int(cb.height * 0.03), badge_d, str(i + 1), accent, tokens)
+
+                tb_t = cb.top + tokens.padding + badge_d + int(tokens.padding * 0.4)
+                tb_w = cb.width - 2 * tokens.padding
+                tb_h = cb.bottom - tb_t - tokens.padding
+                tb = slide.shapes.add_textbox(cb.left + tokens.padding, tb_t, tb_w, tb_h)
+
             tf = tb.text_frame
             populate_card_text(
                 tf,
@@ -1066,7 +1131,9 @@ def render_tech_stack_slide(
         return
 
     n = len(bullets)
-    card_boxes = place_grid(n, box, policy="auto", gap_x=tokens.gap, gap_y=tokens.gap)
+    user_policy = getattr(slide_model, "layout_style", None)
+    policy = user_policy if user_policy in ("vertical", "horizontal") else "auto"
+    card_boxes = place_grid(n, box, policy=policy, gap_x=tokens.gap, gap_y=tokens.gap)
 
     for i, (b, cb) in enumerate(zip(bullets, card_boxes, strict=False)):
         is_ni = (b.source == Source.NEEDS_INPUT)
@@ -1075,24 +1142,41 @@ def render_tech_stack_slide(
 
         add_card(slide, cb, panel_color=panel, accent_color=accent, dashed=is_ni, top_bar=True, tokens=tokens)
 
-        pill_w = max(int(cb.width * 0.40), 500000)
-        pill_h = max(int(cb.height * 0.16), 160000)
-        pill_l = cb.left + tokens.padding
-        pill_t = cb.top + tokens.padding + int(cb.height * 0.03)
-        add_pill(
-            slide,
-            Box(pill_l, pill_t, pill_w, pill_h),
-            "STACK",
-            bg_color=accent,
-            text_color=tokens.bg_color,
-            tokens=tokens,
-        )
-
-        tb_t = pill_t + pill_h + int(tokens.padding * 0.4)
-        tb_w = cb.width - 2 * tokens.padding
-        tb_h = cb.bottom - tb_t - tokens.padding
-
-        tb = slide.shapes.add_textbox(cb.left + tokens.padding, tb_t, tb_w, tb_h)
+        is_wide = (cb.aspect_ratio >= 2.2)
+        if is_wide:
+            pill_w = max(int(cb.width * 0.18), 500000)
+            pill_h = max(int(cb.height * 0.45), 180000)
+            pill_l = cb.left + tokens.padding
+            pill_t = cb.top + int((cb.height - pill_h) / 2)
+            add_pill(
+                slide,
+                Box(pill_l, pill_t, pill_w, pill_h),
+                "STACK",
+                bg_color=accent,
+                text_color=tokens.bg_color,
+                tokens=tokens,
+            )
+            tb_l = pill_l + pill_w + tokens.padding
+            tb_w = cb.right - tb_l - tokens.padding
+            tb_h = cb.height - 2 * tokens.padding
+            tb = slide.shapes.add_textbox(tb_l, cb.top + tokens.padding, tb_w, tb_h)
+        else:
+            pill_w = max(int(cb.width * 0.40), 500000)
+            pill_h = max(int(cb.height * 0.16), 160000)
+            pill_l = cb.left + tokens.padding
+            pill_t = cb.top + tokens.padding + int(cb.height * 0.03)
+            add_pill(
+                slide,
+                Box(pill_l, pill_t, pill_w, pill_h),
+                "STACK",
+                bg_color=accent,
+                text_color=tokens.bg_color,
+                tokens=tokens,
+            )
+            tb_t = pill_t + pill_h + int(tokens.padding * 0.4)
+            tb_w = cb.width - 2 * tokens.padding
+            tb_h = cb.bottom - tb_t - tokens.padding
+            tb = slide.shapes.add_textbox(cb.left + tokens.padding, tb_t, tb_w, tb_h)
         tf = tb.text_frame
         populate_card_text(
             tf,
@@ -1136,7 +1220,9 @@ def render_impact_slide(
         return
 
     n = len(bullets)
-    card_boxes = place_grid(n, box, policy="auto", gap_x=tokens.gap, gap_y=tokens.gap)
+    user_policy = getattr(slide_model, "layout_style", None)
+    policy = user_policy if user_policy in ("vertical", "horizontal") else "auto"
+    card_boxes = place_grid(n, box, policy=policy, gap_x=tokens.gap, gap_y=tokens.gap)
 
     for i, (b, cb) in enumerate(zip(bullets, card_boxes, strict=False)):
         is_ni = (b.source == Source.NEEDS_INPUT)
@@ -1177,7 +1263,11 @@ def render_roadmap_slide(
         return
 
     n = len(bullets)
-    policy = "horizontal" if (box.aspect_ratio >= 1.2 and n <= 4) else "auto"
+    user_policy = getattr(slide_model, "layout_style", None)
+    if user_policy in ("vertical", "horizontal"):
+        policy = user_policy
+    else:
+        policy = "horizontal" if (box.aspect_ratio >= 1.2 and n <= 4) else "auto"
     card_boxes = place_grid(n, box, policy=policy, gap_x=int(tokens.gap * 1.4), gap_y=tokens.gap)
 
     for i, (b, cb) in enumerate(zip(bullets, card_boxes, strict=False)):
@@ -1187,24 +1277,41 @@ def render_roadmap_slide(
 
         add_card(slide, cb, panel_color=panel, accent_color=accent, dashed=is_ni, top_bar=True, tokens=tokens)
 
-        pill_w = max(int(cb.width * 0.45), 500000)
-        pill_h = max(int(cb.height * 0.16), 160000)
-        pill_l = cb.left + tokens.padding
-        pill_t = cb.top + tokens.padding + int(cb.height * 0.03)
-        add_pill(
-            slide,
-            Box(pill_l, pill_t, pill_w, pill_h),
-            f"PHASE {i + 1}",
-            bg_color=accent,
-            text_color=tokens.bg_color,
-            tokens=tokens,
-        )
-
-        tb_t = pill_t + pill_h + int(tokens.padding * 0.4)
-        tb_w = cb.width - 2 * tokens.padding
-        tb_h = cb.bottom - tb_t - tokens.padding
-
-        tb = slide.shapes.add_textbox(cb.left + tokens.padding, tb_t, tb_w, tb_h)
+        is_wide = (cb.aspect_ratio >= 2.2)
+        if is_wide:
+            pill_w = max(int(cb.width * 0.18), 500000)
+            pill_h = max(int(cb.height * 0.45), 180000)
+            pill_l = cb.left + tokens.padding
+            pill_t = cb.top + int((cb.height - pill_h) / 2)
+            add_pill(
+                slide,
+                Box(pill_l, pill_t, pill_w, pill_h),
+                f"PHASE {i + 1}",
+                bg_color=accent,
+                text_color=tokens.bg_color,
+                tokens=tokens,
+            )
+            tb_l = pill_l + pill_w + tokens.padding
+            tb_w = cb.right - tb_l - tokens.padding
+            tb_h = cb.height - 2 * tokens.padding
+            tb = slide.shapes.add_textbox(tb_l, cb.top + tokens.padding, tb_w, tb_h)
+        else:
+            pill_w = max(int(cb.width * 0.45), 500000)
+            pill_h = max(int(cb.height * 0.16), 160000)
+            pill_l = cb.left + tokens.padding
+            pill_t = cb.top + tokens.padding + int(cb.height * 0.03)
+            add_pill(
+                slide,
+                Box(pill_l, pill_t, pill_w, pill_h),
+                f"PHASE {i + 1}",
+                bg_color=accent,
+                text_color=tokens.bg_color,
+                tokens=tokens,
+            )
+            tb_t = pill_t + pill_h + int(tokens.padding * 0.4)
+            tb_w = cb.width - 2 * tokens.padding
+            tb_h = cb.bottom - tb_t - tokens.padding
+            tb = slide.shapes.add_textbox(cb.left + tokens.padding, tb_t, tb_w, tb_h)
         tf = tb.text_frame
         populate_card_text(
             tf,
@@ -1240,7 +1347,9 @@ def render_closing_slide(
 ) -> None:
     bullets = slide_model.bullets
     n = max(1, len(bullets))
-    card_boxes = place_grid(n, box, policy="auto", gap_x=tokens.gap, gap_y=tokens.gap)
+    user_policy = getattr(slide_model, "layout_style", None)
+    policy = user_policy if user_policy in ("vertical", "horizontal") else "auto"
+    card_boxes = place_grid(n, box, policy=policy, gap_x=tokens.gap, gap_y=tokens.gap)
 
     for i, cb in enumerate(card_boxes):
         b = bullets[i] if i < len(bullets) else None
@@ -1250,15 +1359,25 @@ def render_closing_slide(
 
         add_card(slide, cb, panel_color=panel, accent_color=accent, dashed=is_ni, top_bar=True, tokens=tokens)
 
-        badge_d = max(int(min(cb.width, cb.height) * 0.18), 240000)
-        add_number_badge(slide, cb.left + tokens.padding, cb.top + tokens.padding + int(cb.height * 0.03), badge_d, str(i + 1), accent, tokens)
+        is_wide = (cb.aspect_ratio >= 2.2)
+        if is_wide:
+            badge_d = max(int(min(cb.width, cb.height) * 0.40), 240000)
+            badge_l = cb.left + tokens.padding
+            badge_t = cb.top + int((cb.height - badge_d) / 2)
+            add_number_badge(slide, badge_l, badge_t, badge_d, str(i + 1), accent, tokens)
 
-        text_content = b.text if b else "Thank You: Questions & Next Steps"
-        tb_t = cb.top + tokens.padding + badge_d + int(tokens.padding * 0.4)
-        tb_w = cb.width - 2 * tokens.padding
-        tb_h = cb.bottom - tb_t - tokens.padding
+            tb_l = badge_l + badge_d + tokens.padding
+            tb_w = cb.right - tb_l - tokens.padding
+            tb_h = cb.height - 2 * tokens.padding
+            tb = slide.shapes.add_textbox(tb_l, cb.top + tokens.padding, tb_w, tb_h)
+        else:
+            badge_d = max(int(min(cb.width, cb.height) * 0.18), 240000)
+            add_number_badge(slide, cb.left + tokens.padding, cb.top + tokens.padding + int(cb.height * 0.03), badge_d, str(i + 1), accent, tokens)
 
-        tb = slide.shapes.add_textbox(cb.left + tokens.padding, tb_t, tb_w, tb_h)
+            tb_t = cb.top + tokens.padding + badge_d + int(tokens.padding * 0.4)
+            tb_w = cb.width - 2 * tokens.padding
+            tb_h = cb.bottom - tb_t - tokens.padding
+            tb = slide.shapes.add_textbox(cb.left + tokens.padding, tb_t, tb_w, tb_h)
         tf = tb.text_frame
         populate_card_text(
             tf,

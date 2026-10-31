@@ -343,3 +343,44 @@ def test_patch_not_found_errors():
         },
     )
     assert res3.status_code == 404
+
+
+def test_patch_layout_style():
+    _create_template("tmpl_1")
+    deck = build_sample_deck(template_id="tmpl_1", project_id="p_patch_layout")
+    _setup_project_with_version("p_patch_layout", 1, deck)
+
+    client = TestClient(app)
+    slide_id = deck.slides[2].id
+
+    # Patch layout_style to vertical
+    res = client.patch(
+        "/api/projects/p_patch_layout/deck",
+        json={
+            "base_version": 1,
+            "slide_id": slide_id,
+            "target": "layout_style",
+            "text": "vertical",
+        },
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["version"] == 2
+    slide2 = next(s for s in data["deck"]["slides"] if s["id"] == slide_id)
+    assert slide2["layout_style"] == "vertical"
+
+    # Patch layout_style to horizontal
+    res2 = client.patch(
+        "/api/projects/p_patch_layout/deck",
+        json={
+            "base_version": 2,
+            "slide_id": slide_id,
+            "target": "layout_style",
+            "text": "horizontal",
+        },
+    )
+    assert res2.status_code == 200
+    data2 = res2.json()
+    assert data2["version"] == 3
+    slide2_h = next(s for s in data2["deck"]["slides"] if s["id"] == slide_id)
+    assert slide2_h["layout_style"] == "horizontal"

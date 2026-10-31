@@ -101,7 +101,7 @@ class EditRequest(BaseModel):
 class DeckPatchRequest(BaseModel):
     base_version: int
     slide_id: str
-    target: Literal["title", "subtitle", "bullet"]
+    target: Literal["title", "subtitle", "bullet", "layout_style"]
     bullet_index: int | None = None
     text: str
 

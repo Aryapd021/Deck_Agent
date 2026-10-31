@@ -55,6 +55,7 @@ class Slide(BaseModel):
     notes: str = ""
     flagged: bool = False
     slot_index: int | None = None
+    layout_style: str | None = None
 
     @field_validator("bullets")
     @classmethod

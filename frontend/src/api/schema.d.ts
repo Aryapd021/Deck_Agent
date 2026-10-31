@@ -357,7 +357,7 @@ export interface components {
              * Target
              * @enum {string}
              */
-            target: "title" | "subtitle" | "bullet";
+            target: "title" | "subtitle" | "bullet" | "layout_style";
             /** Bullet Index */
             bullet_index?: number | null;
             /** Text */
@@ -579,6 +579,8 @@ export interface components {
             flagged: boolean;
             /** Slot Index */
             slot_index?: number | null;
+            /** Layout Style */
+            layout_style?: string | null;
         };
         /** SlideAnalysisReport */
         SlideAnalysisReport: {

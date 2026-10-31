@@ -209,6 +209,12 @@ async def patch_deck(
             bullet.source = Source.USER
             bullet.evidence = None
             target_desc = f"bullet {req.bullet_index}"
+        elif req.target == "layout_style":
+            style_val = stripped_text.lower()
+            if style_val not in ("vertical", "horizontal", "auto", "grid"):
+                raise ApiError(ErrorCode.BAD_REQUEST, f"Invalid layout style: {stripped_text}")
+            slide.layout_style = style_val
+            target_desc = f"layout to {style_val}"
         else:
             raise ApiError(ErrorCode.NOT_FOUND, f"Unknown target {req.target}")
 

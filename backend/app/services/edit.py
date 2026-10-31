@@ -77,6 +77,7 @@ def compact_deck(deck: Deck, facts: ProjectFacts | None = None) -> dict[str, Any
             "title": title_text,
             "bullets": bullets,
             "notes_chars": len(slide.notes or ""),
+            "layout_style": getattr(slide, "layout_style", None),
         })
 
     diagram_nodes = []
@@ -139,6 +140,8 @@ def summarize_ops(before: Deck, after: Deck, ops: list[EditOp]) -> str:
                 parts.append(f"Slide {n}: notes updated")
             elif op.fields.subtitle is not None:
                 parts.append(f"Slide {n}: subtitle updated")
+            elif op.fields.layout_style is not None:
+                parts.append(f"Slide {n}: layout changed to {op.fields.layout_style}")
             else:
                 parts.append(f"Slide {n}: updated")
 
@@ -213,6 +216,8 @@ async def apply_ops(
                 slide.bullets = list(op.fields.bullets)
             if op.fields.notes is not None:
                 slide.notes = op.fields.notes
+            if getattr(op.fields, "layout_style", None) is not None:
+                slide.layout_style = op.fields.layout_style
 
         elif isinstance(op, MoveSlide):
             slide_idx = next(i for i, s in enumerate(working_deck.slides) if s.id == op.slide_id)
