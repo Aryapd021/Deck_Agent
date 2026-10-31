@@ -333,10 +333,15 @@ def _render_diagram_pillow_fallback(
             x1, y1 = cx - card_w // 2, cy - card_h // 2
             x2, y2 = cx + card_w // 2, cy + card_h // 2
 
-            color_style = getattr(palette, "colors", {}).get(node.kind, getattr(palette, "colors", {}).get(NodeKind.BACKEND)) if hasattr(palette, "colors") else None
-            bg_hex = color_style.fill if color_style else "#FFFFFF"
-            border_hex = color_style.border if color_style else "#1F3A6E"
-            text_hex = color_style.text if color_style else "#1F2937"
+            if isinstance(palette, dict):
+                bg_hex = palette.get("background", "#FFFFFF")
+                border_hex = palette.get("primary", "#1F3A6E")
+                text_hex = palette.get("text", "#1F2937")
+            else:
+                color_style = getattr(palette, "colors", {}).get(node.kind, getattr(palette, "colors", {}).get(NodeKind.BACKEND)) if hasattr(palette, "colors") else None
+                bg_hex = color_style.fill if color_style else "#FFFFFF"
+                border_hex = color_style.border if color_style else "#1F3A6E"
+                text_hex = color_style.text if color_style else "#1F2937"
 
             draw.rounded_rectangle(
                 (x1, y1, x2, y2),
@@ -346,8 +351,9 @@ def _render_diagram_pillow_fallback(
                 width=3,
             )
             draw.text((x1 + 16, y1 + 18), node.label, fill=_to_rgb(text_hex))
-            if node.tech:
-                draw.text((x1 + 16, y1 + 48), node.tech, fill=(107, 114, 128))
+            group_text = getattr(node, "group", None)
+            if group_text:
+                draw.text((x1 + 16, y1 + 48), str(group_text), fill=(107, 114, 128))
 
     # Edges
     svg_edges = []
@@ -391,8 +397,9 @@ def render_diagram(
     out_dir: Path,
     modern: bool | None = None,
     target_box_in: tuple[float, float] | None = None,
+    allow_fallback: bool = False,
 ) -> tuple[Path, Path]:
-    """Renders diagram.svg and diagram.png into out_dir using dot, falling back to Pillow if dot is missing."""
+    """Renders diagram.svg and diagram.png into out_dir using dot, falling back to Pillow if allowed and dot is missing."""
     if modern is None:
         try:
             from app.config import settings
@@ -412,8 +419,10 @@ def render_diagram(
         )
         if local_dot.exists():
             dot_binary = str(local_dot)
-        else:
+        elif allow_fallback or os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
             return _render_diagram_pillow_fallback(graph, palette, out_dir, target_box_in)
+        else:
+            raise ApiError(ErrorCode.TOOL_MISSING, "Graphviz 'dot' binary is not installed or not in PATH")
 
     out_path = Path(out_dir)
     out_path.mkdir(parents=True, exist_ok=True)

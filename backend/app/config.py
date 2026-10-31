@@ -79,10 +79,13 @@ class Settings(BaseSettings):
         writable_tmpl = self.storage_dir / "templates"
         if writable_tmpl.exists():
             return writable_tmpl
+        root_tmpl = REPO_ROOT / "templates"
+        if root_tmpl.exists():
+            return root_tmpl
         backend_tmpl = Path(__file__).resolve().parents[1] / "templates"
         if backend_tmpl.exists():
             return backend_tmpl
-        return REPO_ROOT / "templates"
+        return root_tmpl
 
     @property
     def db_path(self) -> Path:

@@ -2,6 +2,7 @@ import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import logging
+import os
 from pathlib import Path
 import shutil
 from typing import Any, AsyncIterator, Awaitable, Callable, Literal
@@ -401,10 +402,11 @@ async def commit_version(
 
 
 def _invoke_render_diagram(diagram: Any, palette: Any, tmp_dir: Path, target_box_in: tuple[float, float] | None = None) -> Any:
+    is_serverless = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
     try:
-        return render_diagram(diagram, palette, tmp_dir, target_box_in=target_box_in)
+        return render_diagram(diagram, palette, tmp_dir, target_box_in=target_box_in, allow_fallback=is_serverless)
     except TypeError:
-        return render_diagram(diagram, palette, tmp_dir)
+        return render_diagram(diagram, palette, tmp_dir, allow_fallback=is_serverless)
 
 
 async def run_generate(ctx: JobContext) -> JobResult:
@@ -536,8 +538,14 @@ async def run_generate(ctx: JobContext) -> JobResult:
                 )
             except Exception:
                 pass
-            await asyncio.to_thread(_invoke_render_diagram, deck.diagram, palette, tmp_dir, target_box_in)
-            await ctx.emit(stage="diagram", status="done", message="Rendered architecture diagram")
+            try:
+                await asyncio.to_thread(_invoke_render_diagram, deck.diagram, palette, tmp_dir, target_box_in)
+                await ctx.emit(stage="diagram", status="done", message="Rendered architecture diagram")
+            except ApiError:
+                raise
+            except Exception as diag_err:
+                logger.warning("Diagram generation failed, proceeding without diagram: %s", diag_err)
+                await ctx.emit(stage="diagram", status="done", message=f"Diagram generation skipped: {diag_err}")
         else:
             await ctx.emit(stage="diagram", status="done", message="skipped")
 
@@ -701,8 +709,14 @@ async def run_edit(ctx: JobContext, req: EditRequest) -> JobResult:
                     )
                 except Exception:
                     pass
-                await asyncio.to_thread(_invoke_render_diagram, new_deck.diagram, palette, tmp_dir, target_box_in)
-                await ctx.emit(stage="diagram", status="done", message="Rendered architecture diagram")
+                try:
+                    await asyncio.to_thread(_invoke_render_diagram, new_deck.diagram, palette, tmp_dir, target_box_in)
+                    await ctx.emit(stage="diagram", status="done", message="Rendered architecture diagram")
+                except ApiError:
+                    raise
+                except Exception as diag_err:
+                    logger.warning("Diagram generation failed in edit, proceeding without diagram: %s", diag_err)
+                    await ctx.emit(stage="diagram", status="done", message=f"Diagram generation skipped: {diag_err}")
             else:
                 await ctx.emit(stage="diagram", status="done", message="skipped")
 

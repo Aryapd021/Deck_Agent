@@ -47,8 +47,8 @@ async def create_project(
     session: Session = Depends(get_session),
 ) -> ProjectOut:
     template = session.get(TemplateRow, req.template_id)
-    if not template:
-        default_tmpl = session.exec(select(TemplateRow)).first()
+    if not template and req.template_id in ("default", "", None):
+        default_tmpl = session.get(TemplateRow, "default") or session.exec(select(TemplateRow)).first()
         if default_tmpl:
             template = default_tmpl
             req.template_id = default_tmpl.id
@@ -56,6 +56,7 @@ async def create_project(
             default_row = TemplateRow(
                 id="default",
                 name="Default Template",
+                path="templates/default/template.pptx",
                 manifest_json="{}",
                 created_at=datetime.now(timezone.utc),
             )
@@ -64,6 +65,8 @@ async def create_project(
             session.refresh(default_row)
             template = default_row
             req.template_id = "default"
+    elif not template:
+        raise ApiError(ErrorCode.NOT_FOUND, f"Template {req.template_id} not found")
 
     repo_ref = (req.repo_url or req.repo_path or "").strip()
     project_id = uuid4().hex
