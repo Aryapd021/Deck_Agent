@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import shutil
 
 from fastapi import APIRouter, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import select
 
@@ -43,6 +44,14 @@ def create_app() -> FastAPI:
         title="DeckAgent",
         version="0.1.0",
         lifespan=lifespan,
+    )
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     # Register custom API error handlers
