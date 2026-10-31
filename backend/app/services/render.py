@@ -1,5 +1,6 @@
 from pathlib import Path
 import struct
+from typing import Any
 import zipfile
 
 from pptx import Presentation
@@ -571,8 +572,8 @@ def _render_deck_into_existing_slides(
                         orig_l = body_shape.left
                         orig_t = body_shape.top
 
-                        # Split body shape to left side (48% width)
-                        new_body_w = int(orig_w * 0.48)
+                        # Hero diagram layout (UPGRADE-4 Step 5): diagram takes >= 62% width on right, body shape takes ~33% on left
+                        new_body_w = int(orig_w * 0.33)
                         body_shape.width = new_body_w
 
                         # Find footer top to prevent covering footer
@@ -581,11 +582,11 @@ def _render_deck_into_existing_slides(
                         ]
                         footer_top = min(footers) if footers else prs.slide_height
 
-                        rem_left = orig_l + new_body_w + Inches(0.3)
-                        rem_width = int(prs.slide_width - rem_left - Inches(0.6))
+                        rem_left = orig_l + new_body_w + Inches(0.25)
+                        rem_width = int(orig_l + orig_w - rem_left)
                         rem_top = Inches(1.8) if orig_t > Inches(1.5) else orig_t
                         rem_height = max(
-                            Inches(2.5), footer_top - rem_top - Inches(0.4)
+                            Inches(3.0), footer_top - rem_top - Inches(0.2)
                         )
 
                         if rem_width > Inches(2.0):
@@ -1055,6 +1056,17 @@ def render_deck(
                 sp = b_ph._element
                 if sp.getparent() is not None:
                     sp.getparent().remove(sp)
+
+                pic_ph = ph_by_idx.get(slot.picture_idx) if slot and slot.picture_idx is not None else None
+                if pic_ph is not None:
+                    u_left = min(body_rect[0], pic_ph.left)
+                    u_top = min(body_rect[1], pic_ph.top)
+                    u_right = max(body_rect[0] + body_rect[2], pic_ph.left + pic_ph.width)
+                    u_bottom = max(body_rect[1] + body_rect[3], pic_ph.top + pic_ph.height)
+                    body_rect = (u_left, u_top, u_right - u_left, u_bottom - u_top)
+                    sp_p = pic_ph._element
+                    if sp_p.getparent() is not None:
+                        sp_p.getparent().remove(sp_p)
             else:
                 top_pos = (title_ph.top + title_ph.height + int(0.02 * prs.slide_height)) if title_ph else int(0.18 * prs.slide_height)
                 footer_shapes = [s.top for s in pptx_slide.shapes if s.top > 0.75 * prs.slide_height]

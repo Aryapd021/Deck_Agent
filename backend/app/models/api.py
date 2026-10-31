@@ -158,6 +158,8 @@ class FitLimits(BaseModel):
 class TemplateSlot(BaseModel):
     slot_index: int
     slot_title: str
+    role: str = "body"
+    rect: tuple[int, int, int, int] | None = None
     hint: str = ""
 
 

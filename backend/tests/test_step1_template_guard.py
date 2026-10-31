@@ -90,3 +90,4 @@ def test_guard_asserts_template_fidelity(tmp_path: Path):
     ]
     for i, name in enumerate(expected_layouts):
         assert out_prs.slide_layouts[i].name == name
+

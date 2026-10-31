@@ -231,6 +231,37 @@ export function InputsPane({
               );
             })}
           </select>
+          {(() => {
+            const selectedTmpl = templates?.find((t) => t.id === templateId);
+            if (!selectedTmpl) return null;
+            const reports = selectedTmpl.manifest?.profile?.analysis_reports ?? [];
+            const nSlides = reports.length || selectedTmpl.manifest?.profile?.slots?.length || 0;
+            const mBody = reports.length > 0
+              ? reports.filter((r) => (r.fillable_count ?? 0) > 0).length
+              : (selectedTmpl.manifest?.profile?.slots?.length || 0);
+            const kStatic = Math.max(0, nSlides - mBody);
+            const isFillMode = selectedTmpl.manifest?.mode === "fill";
+
+            return (
+              <div className="mt-2 p-2.5 bg-slate-900/80 border border-slate-800 rounded-lg space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-200 truncate">{selectedTmpl.name}</span>
+                  {isFillMode ? (
+                    <span className="text-[10px] font-medium px-2 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full">
+                      Follows template slides 1-to-1
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-medium px-2 py-0.5 bg-slate-800 text-slate-400 border border-slate-700 rounded-full">
+                      Layouts mode
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  {nSlides} slides detected: {mBody} with body placeholders, {kStatic} static
+                </p>
+              </div>
+            );
+          })()}
           {uploadStatus && (
             <p className="text-[11px] text-emerald-400 mt-1 flex items-center gap-1">
               <span>&#10003;</span> {uploadStatus}

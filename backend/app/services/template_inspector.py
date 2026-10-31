@@ -455,6 +455,7 @@ def classify_slide_shapes(
                 PP_PLACEHOLDER.TABLE,
                 PP_PLACEHOLDER.CHART,
                 PP_PLACEHOLDER.PICTURE,
+                PP_PLACEHOLDER.SUBTITLE,
             ):
                 fillable_shapes.append(shape)
                 continue
@@ -789,7 +790,18 @@ def _do_analyze_template(pptx_path: Path | str) -> TemplateProfile:
         fbox = compute_free_box(sld, slide_w, slide_h, stat_shapes, fill_shapes)
         slot_title, hint = extract_slot_info(sld, idx, fill_shapes)
 
-        slots.append(TemplateSlot(slot_index=idx, slot_title=slot_title, hint=hint))
+        # Classify slot role: title, body, metric, callout
+        hint_lower = (hint + " " + slot_title).lower()
+        if idx == 0 or "title" in hint_lower:
+            role = "title"
+        elif any(k in hint_lower for k in ("metric", "number", "kpi", "stat", "data")):
+            role = "metric"
+        elif any(k in hint_lower for k in ("callout", "quote", "takeaway")):
+            role = "callout"
+        else:
+            role = "body"
+
+        slots.append(TemplateSlot(slot_index=idx, slot_title=slot_title, role=role, rect=fbox, hint=hint))
         analysis_reports.append(
             SlideAnalysisReport(
                 slide_index=idx,

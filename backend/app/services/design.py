@@ -645,6 +645,8 @@ def add_pill(
     bg_color: str,
     text_color: str,
     tokens: ProfileTokens,
+    font_name: str | None = None,
+    font_pt: float | None = None,
 ) -> Any:
     """Draws a rounded pill with uppercase bold text."""
     pill = slide.shapes.add_shape(
@@ -663,8 +665,8 @@ def add_pill(
     tf.margin_bottom = int(box.height * 0.05)
     p = tf.paragraphs[0]
     p.text = text.upper()
-    p.font.name = tokens.font_name
-    pill_size_pt = max(tokens.min_body_pt * 0.85, 7.5)
+    p.font.name = font_name if font_name else tokens.font_name
+    pill_size_pt = font_pt if font_pt else max(tokens.min_body_pt * 0.85, 7.5)
     p.font.size = Pt(pill_size_pt)
     p.font.bold = True
     safe_text_color = ensure_contrast(text_color, bg_color, 4.5)
@@ -1299,9 +1301,25 @@ def render_architecture_slide(
             diag_box = Box(diag_l, diag_t, diag_w, diag_h)
 
             remaining_h = box.bottom - diag_box.bottom - tokens.gap
-            if bullets and remaining_h >= int(box.height * 0.14):
-                notes_box = Box(box.left, diag_box.bottom + tokens.gap, box.width, remaining_h)
-                notes_policy = "horizontal"
+            if bullets:
+                # If remaining height is too tight for notes, reduce diag_box height to reserve >= 20%
+                min_notes_h = int(box.height * 0.20)
+                if remaining_h < min_notes_h:
+                    avail_diag_h = box.height - min_notes_h - tokens.gap
+                    if avail_diag_h >= int(box.height * 0.50):
+                        pic_h = avail_diag_h - pill_h - 2 * pad_y
+                        pic_w = min(int(box.width * 0.95), int(pic_h * diag_ar))
+                        diag_w = pic_w + 2 * pad_x
+                        diag_h = pic_h + pill_h + 2 * pad_y
+                        diag_box = Box(box.left + int((box.width - diag_w) / 2), box.top, diag_w, diag_h)
+                        remaining_h = box.bottom - diag_box.bottom - tokens.gap
+
+                if remaining_h >= int(box.height * 0.12):
+                    notes_box = Box(box.left, diag_box.bottom + tokens.gap, box.width, remaining_h)
+                    notes_policy = "horizontal"
+                else:
+                    notes_box = None
+                    notes_policy = "horizontal"
             else:
                 notes_box = None
                 notes_policy = "horizontal"
@@ -1333,7 +1351,7 @@ def render_architecture_slide(
         diag_box = None
         notes_policy = user_policy if user_policy in ("vertical", "horizontal") else "auto"
 
-    if bullets:
+    if bullets and notes_box:
         card_boxes = place_grid(len(bullets), notes_box, policy=notes_policy, gap_x=tokens.gap if notes_policy == "horizontal" else 0, gap_y=tokens.gap)
         for i, (b, cb) in enumerate(zip(bullets, card_boxes, strict=False)):
             is_ni = (b.source == Source.NEEDS_INPUT)
@@ -1773,7 +1791,7 @@ def render_designed_slide(
     has_take = bool(getattr(slide_model, "takeaway", None))
     bands = compute_slide_bands(content_box, has_summary=has_sum, has_takeaway=has_take)
 
-    if bands.summary_box and getattr(slide_model, "summary", None):
+    if recipe_key not in ("title", "architecture") and bands.summary_box and getattr(slide_model, "summary", None):
         add_card(pptx_slide, bands.summary_box, panel_color=tokens.panel_fills[0], accent_color=tokens.primary, dashed=False, top_bar=False, tokens=tokens)
         pad = int(tokens.padding * 0.5)
         tb_s = pptx_slide.shapes.add_textbox(bands.summary_box.left + pad, bands.summary_box.top + pad, bands.summary_box.width - 2 * pad, bands.summary_box.height - 2 * pad)
@@ -1786,7 +1804,7 @@ def render_designed_slide(
         p_s.font.bold = True
         p_s.font.color.rgb = hex_to_rgb(tokens.primary)
 
-    active_box = bands.main_box if (has_sum or has_take) else content_box
+    active_box = bands.main_box if (has_sum or has_take) and recipe_key not in ("title", "architecture") else content_box
 
     if recipe_key == "title":
         render_title_slide(pptx_slide, slide_model, content_box, tokens, is_custom=is_custom)
@@ -1811,7 +1829,7 @@ def render_designed_slide(
     else:
         render_features_slide(pptx_slide, slide_model, active_box, tokens, on_progress, slide_num)
 
-    if bands.takeaway_box and getattr(slide_model, "takeaway", None):
+    if recipe_key not in ("title", "architecture") and bands.takeaway_box and getattr(slide_model, "takeaway", None):
         add_pill(
             pptx_slide,
             bands.takeaway_box,

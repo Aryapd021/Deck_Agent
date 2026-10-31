@@ -78,7 +78,13 @@ async def build_deck(
     slots_str = ""
     if is_fill_mode and manifest.profile:
         slots_data = [
-            {"slot_index": s.slot_index, "slot_title": s.slot_title, "hint": s.hint}
+            {
+                "slot_index": s.slot_index,
+                "slot_title": s.slot_title,
+                "role": getattr(s, "role", "body"),
+                "rect": getattr(s, "rect", None),
+                "hint": s.hint,
+            }
             for s in manifest.profile.slots
         ]
         slots_str = json.dumps(slots_data, indent=2)
