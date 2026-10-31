@@ -77,6 +77,7 @@ export function CommandPane({
         command: commandText,
         base_version: currentVersion,
         target_slide_id: selectedSlideId ?? undefined,
+        deck: deckResp?.deck ?? undefined,
       });
 
       // Clear the textarea only after a successful send

@@ -100,6 +100,7 @@ class EditRequest(BaseModel):
     command: str
     base_version: int
     target_slide_id: str | None = None
+    deck: Deck | None = None
 
 
 class DeckPatchRequest(BaseModel):

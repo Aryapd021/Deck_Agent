@@ -24,6 +24,7 @@ export type ProjectOut = S["ProjectOut"];
 export type InputsRequest = S["InputsRequest"];
 export type InputsOut = S["InputsOut"];
 export type JobAccepted = S["JobAccepted"];
+export type Deck = S["Deck"];
 export type DeckResponse = S["DeckResponse"];
 export type LayoutMapUpdate = S["LayoutMapUpdate"];
 
@@ -46,6 +47,7 @@ export type EditRequest = {
   command: string;
   base_version: number;
   target_slide_id?: string | null;
+  deck?: S["Deck"] | null;
 };
 
 export type DeckPatchRequest = {

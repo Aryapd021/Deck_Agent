@@ -403,10 +403,15 @@ async def commit_version(
 
 def _invoke_render_diagram(diagram: Any, palette: Any, tmp_dir: Path, target_box_in: tuple[float, float] | None = None) -> Any:
     is_serverless = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+    if is_serverless:
+        try:
+            return render_diagram(diagram, palette, tmp_dir, target_box_in=target_box_in, allow_fallback=True)
+        except TypeError:
+            pass
     try:
-        return render_diagram(diagram, palette, tmp_dir, target_box_in=target_box_in, allow_fallback=is_serverless)
+        return render_diagram(diagram, palette, tmp_dir, target_box_in=target_box_in)
     except TypeError:
-        return render_diagram(diagram, palette, tmp_dir, allow_fallback=is_serverless)
+        return render_diagram(diagram, palette, tmp_dir)
 
 
 async def run_generate(ctx: JobContext) -> JobResult:
@@ -613,12 +618,46 @@ async def run_generate(ctx: JobContext) -> JobResult:
 async def run_edit(ctx: JobContext, req: EditRequest) -> JobResult:
     with session_scope() as session:
         project = session.get(ProjectRow, ctx.project_id)
+        if not project and req.deck:
+            tmpl_id = getattr(req.deck, "template_id", "default") or "default"
+            tmpl = session.get(TemplateRow, tmpl_id) or session.get(TemplateRow, "default")
+            if not tmpl:
+                tmpl = TemplateRow(
+                    id=tmpl_id,
+                    name="Default Template",
+                    path="templates/default/template.pptx",
+                    manifest_json="{}",
+                    created_at=datetime.now(timezone.utc),
+                )
+                session.add(tmpl)
+                session.commit()
+                session.refresh(tmpl)
+            project = ProjectRow(
+                id=ctx.project_id,
+                name="Project",
+                repo_ref="",
+                template_id=tmpl.id,
+                created_at=datetime.now(timezone.utc),
+            )
+            session.add(project)
+            session.commit()
+            session.refresh(project)
+
         if not project:
             raise ApiError(ErrorCode.NOT_FOUND, f"Project {ctx.project_id} not found")
 
-        template = session.get(TemplateRow, project.template_id)
+        template = session.get(TemplateRow, project.template_id) or session.get(TemplateRow, "default")
         if not template:
-            raise ApiError(ErrorCode.NOT_FOUND, f"Template {project.template_id} not found")
+            template = TemplateRow(
+                id="default",
+                name="Default Template",
+                path="templates/default/template.pptx",
+                manifest_json="{}",
+                created_at=datetime.now(timezone.utc),
+            )
+            session.add(template)
+            session.commit()
+            session.refresh(template)
 
         template_id = project.template_id
         try:
@@ -635,12 +674,29 @@ async def run_edit(ctx: JobContext, req: EditRequest) -> JobResult:
             DeckVersionRow.version == req.base_version,
         )
         base_v_row = session.exec(stmt).first()
+        if not base_v_row and req.deck:
+            base_v_row = DeckVersionRow(
+                project_id=ctx.project_id,
+                version=req.base_version,
+                created_by="generate",
+                summary="Base version",
+                deck_json=req.deck.model_dump_json(),
+                created_at=datetime.now(timezone.utc),
+            )
+            session.add(base_v_row)
+            session.commit()
+            session.refresh(base_v_row)
+
         if not base_v_row:
             raise ApiError(ErrorCode.NOT_FOUND, f"Base version {req.base_version} not found")
 
         deck = Deck.model_validate_json(base_v_row.deck_json)
 
     base_dir = version_dir(ctx.project_id, req.base_version)
+    base_dir.mkdir(parents=True, exist_ok=True)
+    deck_json_path = base_dir / "deck.json"
+    if not deck_json_path.exists():
+        deck_json_path.write_text(deck.model_dump_json(), encoding="utf-8")
     facts_path = base_dir / "facts.json"
     facts: ProjectFacts | None = None
     if facts_path.exists():

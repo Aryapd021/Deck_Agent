@@ -167,6 +167,31 @@ async def edit_deck(
     session: Session = Depends(get_session),
 ) -> JobAccepted:
     project = session.get(ProjectRow, id)
+    if not project and req.deck:
+        tmpl_id = getattr(req.deck, "template_id", "default") or "default"
+        tmpl = session.get(TemplateRow, tmpl_id) or session.get(TemplateRow, "default")
+        if not tmpl:
+            tmpl = TemplateRow(
+                id=tmpl_id,
+                name="Default Template",
+                path="templates/default/template.pptx",
+                manifest_json="{}",
+                created_at=datetime.now(timezone.utc),
+            )
+            session.add(tmpl)
+            session.commit()
+            session.refresh(tmpl)
+        project = ProjectRow(
+            id=id,
+            name="Project",
+            repo_ref="",
+            template_id=tmpl.id,
+            created_at=datetime.now(timezone.utc),
+        )
+        session.add(project)
+        session.commit()
+        session.refresh(project)
+
     if not project:
         raise ApiError(ErrorCode.NOT_FOUND, f"Project {id} not found")
 
@@ -177,6 +202,25 @@ async def edit_deck(
             .where(DeckVersionRow.project_id == id)
         )
         max_v = session.exec(stmt).first()
+        if (max_v is None or max_v == 0) and req.deck:
+            v_row = DeckVersionRow(
+                project_id=id,
+                version=req.base_version,
+                created_by="generate",
+                summary="Base version",
+                deck_json=req.deck.model_dump_json(),
+                created_at=datetime.now(timezone.utc),
+            )
+            session.add(v_row)
+            session.commit()
+            session.refresh(v_row)
+            max_v = req.base_version
+
+            from app.core.storage import version_dir
+            b_dir = version_dir(id, req.base_version)
+            b_dir.mkdir(parents=True, exist_ok=True)
+            (b_dir / "deck.json").write_text(req.deck.model_dump_json(), encoding="utf-8")
+
         if max_v is None or max_v == 0:
             raise ApiError(ErrorCode.NOT_FOUND, f"Project {id} has no deck versions")
 
