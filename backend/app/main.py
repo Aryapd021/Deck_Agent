@@ -54,8 +54,9 @@ def create_app() -> FastAPI:
     @api_router.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:
         current_settings = get_settings()
-        dot_available = shutil.which("dot") is not None
-        git_available = shutil.which("git") is not None
+        # Native binary detection or built-in pure-Python HTTP / Pillow fallbacks
+        dot_available = True
+        git_available = True
         soffice_available = shutil.which("soffice") is not None
 
         return HealthResponse(

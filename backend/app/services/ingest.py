@@ -187,8 +187,57 @@ def _build_repo_digest_sync(repo_ref: str) -> RepoDigest:
     settings = get_settings()
 
     if is_url:
+        is_github_https = ref_trimmed.lower().startswith("https://") and "github.com" in ref_trimmed.lower()
         if not shutil.which("git"):
-            raise ApiError(ErrorCode.TOOL_MISSING, "git is not installed or not in PATH")
+            if is_github_https:
+                import io
+                import zipfile
+                import httpx
+
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    clean_url = ref_trimmed.rstrip("/")
+                    if clean_url.endswith(".git"):
+                        clean_url = clean_url[:-4]
+
+                    headers = {"User-Agent": "DeckAgent"}
+                    if settings.github_token:
+                        headers["Authorization"] = f"token {settings.github_token}"
+
+                    zip_urls = [
+                        f"{clean_url}/archive/refs/heads/main.zip",
+                        f"{clean_url}/archive/refs/heads/master.zip",
+                    ]
+                    parts = clean_url.split("github.com/")[-1].split("/")
+                    if len(parts) >= 2:
+                        owner, repo = parts[0], parts[1]
+                        zip_urls.append(f"https://api.github.com/repos/{owner}/{repo}/zipball/HEAD")
+
+                    downloaded = False
+                    for z_url in zip_urls:
+                        try:
+                            resp = httpx.get(z_url, headers=headers, follow_redirects=True, timeout=30)
+                            if resp.status_code == 200 and resp.content:
+                                with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
+                                    zf.extractall(tmpdir)
+                                downloaded = True
+                                break
+                        except Exception:
+                            continue
+
+                    if not downloaded:
+                        raise ApiError(ErrorCode.REPO_UNREACHABLE, f"Failed to download repository archive from {ref_trimmed}")
+
+                    extracted_roots = [p for p in Path(tmpdir).iterdir() if p.is_dir()]
+                    actual_root = extracted_roots[0] if extracted_roots else Path(tmpdir)
+
+                    return _process_repo_root(
+                        root_path=actual_root,
+                        repo_name=repo_name,
+                        source_kind=source_kind,
+                        max_tokens=settings.max_repo_tokens,
+                    )
+            else:
+                raise ApiError(ErrorCode.TOOL_MISSING, "git is not installed or not in PATH")
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cmd = ["git"]

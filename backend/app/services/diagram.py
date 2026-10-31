@@ -273,6 +273,118 @@ def build_dot(
     return "\n".join(lines)
 
 
+def _render_diagram_pillow_fallback(
+    graph: ComponentGraph,
+    palette: Any,
+    out_dir: Path,
+    target_box_in: tuple[float, float] | None = None,
+) -> tuple[Path, Path]:
+    """Pure-Python diagram renderer fallback using Pillow when dot binary is unavailable."""
+    from PIL import Image, ImageDraw
+
+    out_path = Path(out_dir)
+    out_path.mkdir(parents=True, exist_ok=True)
+    svg_path = out_path / "diagram.svg"
+    png_path = out_path / "diagram.png"
+
+    target_w_in, target_h_in = target_box_in if target_box_in else (8.0, 4.5)
+    width_px = max(1200, int(target_w_in * 200))
+    height_px = max(680, int(target_h_in * 200))
+
+    img = Image.new("RGBA", (width_px, height_px), (255, 255, 255, 255))
+    draw = ImageDraw.Draw(img)
+
+    # Layer nodes into client, server, data
+    layer_map: dict[str, list[Node]] = {"client": [], "server": [], "data": []}
+    for n in graph.nodes:
+        kind_str = (n.kind.value if hasattr(n.kind, "value") else str(n.kind)).lower()
+        if any(k in kind_str for k in ("front", "client", "ui", "web")):
+            layer_map["client"].append(n)
+        elif any(k in kind_str for k in ("db", "data", "sql", "cache", "store")):
+            layer_map["data"].append(n)
+        else:
+            layer_map["server"].append(n)
+
+    active_layers = [l for l in ("client", "server", "data") if layer_map[l]]
+    if not active_layers:
+        active_layers = ["server"]
+        layer_map["server"] = list(graph.nodes)
+
+    col_count = len(active_layers)
+    card_w = min(int((width_px // (col_count + 1)) * 0.85), 320)
+    card_h = 90
+    node_centers: dict[str, tuple[int, int]] = {}
+
+    def _to_rgb(h: str) -> tuple[int, int, int]:
+        h = h.lstrip("#")
+        if len(h) == 6:
+            return (int(h[:2], 16), int(h[2:4], 16), int(h[4:], 16))
+        return (31, 58, 110)
+
+    for col_idx, layer_key in enumerate(active_layers):
+        layer_nodes = layer_map[layer_key]
+        n_count = len(layer_nodes)
+        cx = int((col_idx + 1) * width_px / (col_count + 1))
+        spacing = height_px // (n_count + 1)
+
+        for row_idx, node in enumerate(layer_nodes):
+            cy = int((row_idx + 1) * spacing)
+            node_centers[node.id] = (cx, cy)
+            x1, y1 = cx - card_w // 2, cy - card_h // 2
+            x2, y2 = cx + card_w // 2, cy + card_h // 2
+
+            color_style = getattr(palette, "colors", {}).get(node.kind, getattr(palette, "colors", {}).get(NodeKind.BACKEND)) if hasattr(palette, "colors") else None
+            bg_hex = color_style.fill if color_style else "#FFFFFF"
+            border_hex = color_style.border if color_style else "#1F3A6E"
+            text_hex = color_style.text if color_style else "#1F2937"
+
+            draw.rounded_rectangle(
+                (x1, y1, x2, y2),
+                radius=14,
+                fill=_to_rgb(bg_hex),
+                outline=_to_rgb(border_hex),
+                width=3,
+            )
+            draw.text((x1 + 16, y1 + 18), node.label, fill=_to_rgb(text_hex))
+            if node.tech:
+                draw.text((x1 + 16, y1 + 48), node.tech, fill=(107, 114, 128))
+
+    # Edges
+    svg_edges = []
+    for edge in graph.edges:
+        if edge.from_ in node_centers and edge.to in node_centers:
+            p1 = node_centers[edge.from_]
+            p2 = node_centers[edge.to]
+            start_x = p1[0] + card_w // 2
+            start_y = p1[1]
+            end_x = p2[0] - card_w // 2
+            end_y = p2[1]
+            if start_x >= end_x:
+                start_x, end_x = p1[0], p2[0]
+
+            draw.line([(start_x, start_y), (end_x, end_y)], fill=(156, 163, 175), width=3)
+            draw.polygon(
+                [(end_x, end_y), (end_x - 10, end_y - 6), (end_x - 10, end_y + 6)],
+                fill=(107, 114, 128),
+            )
+            if edge.label:
+                mid_x = (start_x + end_x) // 2
+                mid_y = (start_y + end_y) // 2 - 14
+                draw.text((mid_x, mid_y), edge.label, fill=(75, 85, 99))
+            svg_edges.append(f'<line x1="{start_x}" y1="{start_y}" x2="{end_x}" y2="{end_y}" stroke="#9CA3AF" stroke-width="2"/>')
+
+    img.save(png_path, "PNG")
+
+    svg_nodes = []
+    for nid, (cx, cy) in node_centers.items():
+        x1, y1 = cx - card_w // 2, cy - card_h // 2
+        svg_nodes.append(f'<rect x="{x1}" y="{y1}" width="{card_w}" height="{card_h}" rx="12" fill="#FFFFFF" stroke="#1F3A6E" stroke-width="2"/>')
+    svg_content = f'<svg xmlns="http://www.w3.org/2000/svg" width="{width_px}" height="{height_px}">' + "".join(svg_edges + svg_nodes) + '</svg>'
+    svg_path.write_text(svg_content, encoding="utf-8")
+
+    return svg_path, png_path
+
+
 def render_diagram(
     graph: ComponentGraph,
     palette: dict[str, str],
@@ -280,7 +392,7 @@ def render_diagram(
     modern: bool | None = None,
     target_box_in: tuple[float, float] | None = None,
 ) -> tuple[Path, Path]:
-    """Renders diagram.svg and diagram.png into out_dir using dot."""
+    """Renders diagram.svg and diagram.png into out_dir using dot, falling back to Pillow if dot is missing."""
     if modern is None:
         try:
             from app.config import settings
@@ -301,7 +413,7 @@ def render_diagram(
         if local_dot.exists():
             dot_binary = str(local_dot)
         else:
-            raise ApiError(ErrorCode.TOOL_MISSING, "Graphviz 'dot' binary is not installed or not in PATH")
+            return _render_diagram_pillow_fallback(graph, palette, out_dir, target_box_in)
 
     out_path = Path(out_dir)
     out_path.mkdir(parents=True, exist_ok=True)
