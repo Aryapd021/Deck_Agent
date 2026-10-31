@@ -10,7 +10,7 @@ from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE, PP_PLACEHOLDER
 
 from app.core.errors import ApiError, ErrorCode
-from app.core.storage import template_manifest_path
+from app.core.storage import template_manifest_path, template_pptx_path
 from app.models.api import (
     FitLimits,
     LayoutInfo,

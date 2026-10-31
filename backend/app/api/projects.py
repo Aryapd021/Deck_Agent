@@ -41,6 +41,18 @@ import asyncio
 router = APIRouter(tags=["projects"])
 
 
+def _get_default_manifest_json() -> str:
+    from app.core.storage import template_manifest_path
+    for tid in ("default", "tmpl_1"):
+        try:
+            p = template_manifest_path(tid)
+            if p.exists():
+                return p.read_text(encoding="utf-8")
+        except Exception:
+            pass
+    return "{}"
+
+
 @router.post("/projects", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)
 async def create_project(
     req: CreateProjectRequest,
@@ -57,7 +69,7 @@ async def create_project(
                 id="default",
                 name="Default Template",
                 path="templates/default/template.pptx",
-                manifest_json="{}",
+                manifest_json=_get_default_manifest_json(),
                 created_at=datetime.now(timezone.utc),
             )
             session.add(default_row)
@@ -175,7 +187,7 @@ async def edit_deck(
                 id=tmpl_id,
                 name="Default Template",
                 path="templates/default/template.pptx",
-                manifest_json="{}",
+                manifest_json=_get_default_manifest_json(),
                 created_at=datetime.now(timezone.utc),
             )
             session.add(tmpl)

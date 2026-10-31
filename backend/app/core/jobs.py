@@ -414,6 +414,18 @@ def _invoke_render_diagram(diagram: Any, palette: Any, tmp_dir: Path, target_box
         return render_diagram(diagram, palette, tmp_dir)
 
 
+def _get_default_manifest_json() -> str:
+    from app.core.storage import template_manifest_path
+    for tid in ("default", "tmpl_1"):
+        try:
+            p = template_manifest_path(tid)
+            if p.exists():
+                return p.read_text(encoding="utf-8")
+        except Exception:
+            pass
+    return "{}"
+
+
 async def run_generate(ctx: JobContext) -> JobResult:
     with session_scope() as session:
         project = session.get(ProjectRow, ctx.project_id)
@@ -427,7 +439,7 @@ async def run_generate(ctx: JobContext) -> JobResult:
                 template = TemplateRow(
                     id="default",
                     name="Default Template",
-                    manifest_json="{}",
+                    manifest_json=_get_default_manifest_json(),
                     created_at=datetime.now(timezone.utc),
                 )
                 session.add(template)
@@ -626,7 +638,7 @@ async def run_edit(ctx: JobContext, req: EditRequest) -> JobResult:
                     id=tmpl_id,
                     name="Default Template",
                     path="templates/default/template.pptx",
-                    manifest_json="{}",
+                    manifest_json=_get_default_manifest_json(),
                     created_at=datetime.now(timezone.utc),
                 )
                 session.add(tmpl)
@@ -652,7 +664,7 @@ async def run_edit(ctx: JobContext, req: EditRequest) -> JobResult:
                 id="default",
                 name="Default Template",
                 path="templates/default/template.pptx",
-                manifest_json="{}",
+                manifest_json=_get_default_manifest_json(),
                 created_at=datetime.now(timezone.utc),
             )
             session.add(template)

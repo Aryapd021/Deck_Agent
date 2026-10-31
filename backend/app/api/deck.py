@@ -25,6 +25,22 @@ async def get_latest_deck(
 ) -> DeckResponse:
     project = session.get(ProjectRow, id)
     if not project:
+        from app.core.storage import project_dir
+        p_dir = project_dir(id)
+        if p_dir.exists():
+            from datetime import datetime, timezone
+            project = ProjectRow(
+                id=id,
+                name="Project",
+                repo_ref="",
+                template_id="default",
+                created_at=datetime.now(timezone.utc),
+            )
+            session.add(project)
+            session.commit()
+            session.refresh(project)
+
+    if not project:
         raise ApiError(ErrorCode.NOT_FOUND, f"Project {id} not found")
 
     stmt = (
@@ -33,6 +49,31 @@ async def get_latest_deck(
         .order_by(DeckVersionRow.version.desc())
     )
     latest_version = session.exec(stmt).first()
+    if not latest_version:
+        from app.core.storage import project_dir
+        p_dir = project_dir(id)
+        if p_dir.exists():
+            v_dirs = sorted([d for d in p_dir.glob("v*") if d.is_dir() and not d.name.endswith(".tmp")], key=lambda d: int(d.name[1:]) if d.name[1:].isdigit() else 0, reverse=True)
+            for vd in v_dirs:
+                deck_json_path = vd / "deck.json"
+                if deck_json_path.exists():
+                    from datetime import datetime, timezone
+                    v_num = int(vd.name[1:])
+                    deck_str = deck_json_path.read_text(encoding="utf-8")
+                    v_row = DeckVersionRow(
+                        project_id=id,
+                        version=v_num,
+                        created_by="generate",
+                        summary="Restored version",
+                        deck_json=deck_str,
+                        created_at=datetime.now(timezone.utc),
+                    )
+                    session.add(v_row)
+                    session.commit()
+                    session.refresh(v_row)
+                    latest_version = v_row
+                    break
+
     if not latest_version:
         raise ApiError(ErrorCode.NOT_FOUND, f"No deck version found for project {id}")
 
@@ -53,6 +94,22 @@ async def list_versions(
 ) -> list[VersionInfo]:
     project = session.get(ProjectRow, id)
     if not project:
+        from app.core.storage import project_dir
+        p_dir = project_dir(id)
+        if p_dir.exists():
+            from datetime import datetime, timezone
+            project = ProjectRow(
+                id=id,
+                name="Project",
+                repo_ref="",
+                template_id="default",
+                created_at=datetime.now(timezone.utc),
+            )
+            session.add(project)
+            session.commit()
+            session.refresh(project)
+
+    if not project:
         raise ApiError(ErrorCode.NOT_FOUND, f"Project {id} not found")
 
     stmt = (
@@ -60,7 +117,30 @@ async def list_versions(
         .where(DeckVersionRow.project_id == id)
         .order_by(DeckVersionRow.version.desc())
     )
-    rows = session.exec(stmt).all()
+    rows = list(session.exec(stmt).all())
+    if not rows:
+        from app.core.storage import project_dir
+        p_dir = project_dir(id)
+        if p_dir.exists():
+            v_dirs = sorted([d for d in p_dir.glob("v*") if d.is_dir() and not d.name.endswith(".tmp")], key=lambda d: int(d.name[1:]) if d.name[1:].isdigit() else 0, reverse=True)
+            for vd in v_dirs:
+                deck_json_path = vd / "deck.json"
+                if deck_json_path.exists():
+                    from datetime import datetime, timezone
+                    v_num = int(vd.name[1:])
+                    deck_str = deck_json_path.read_text(encoding="utf-8")
+                    v_row = DeckVersionRow(
+                        project_id=id,
+                        version=v_num,
+                        created_by="generate",
+                        summary="Restored version",
+                        deck_json=deck_str,
+                        created_at=datetime.now(timezone.utc),
+                    )
+                    session.add(v_row)
+                    session.commit()
+                    session.refresh(v_row)
+                    rows.append(v_row)
 
     return [
         VersionInfo(

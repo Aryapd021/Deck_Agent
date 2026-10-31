@@ -82,13 +82,12 @@ class Settings(BaseSettings):
             writable.mkdir(parents=True, exist_ok=True)
             return writable
 
-        # Local dev: prefer storage/templates (writable), then repo templates (for bundled files)
-        writable_tmpl = self.storage_dir / "templates"
-        if writable_tmpl.exists():
-            return writable_tmpl
         root_tmpl = REPO_ROOT / "templates"
         if root_tmpl.exists():
             return root_tmpl
+        writable_tmpl = self.storage_dir / "templates"
+        if writable_tmpl.exists():
+            return writable_tmpl
         backend_tmpl = Path(__file__).resolve().parents[1] / "templates"
         if backend_tmpl.exists():
             return backend_tmpl

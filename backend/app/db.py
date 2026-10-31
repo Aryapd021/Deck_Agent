@@ -84,11 +84,21 @@ def init_db() -> None:
                 # Ensure an explicit 'default' template row exists
                 has_default = session.get(TemplateRow, "default")
                 if not has_default:
+                    default_m_json = "{}"
+                    if bundled_dir:
+                        for candidate_name in ("default.manifest.json", "tmpl_1.manifest.json"):
+                            cand_file = bundled_dir / candidate_name
+                            if cand_file.exists():
+                                try:
+                                    default_m_json = cand_file.read_text(encoding="utf-8")
+                                    break
+                                except Exception:
+                                    pass
                     session.add(
                         TemplateRow(
                             id="default",
                             name="Default Template",
-                            manifest_json="{}",
+                            manifest_json=default_m_json,
                             created_at=datetime.now(timezone.utc),
                         )
                     )
