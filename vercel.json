@@ -13,9 +13,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": {
-        "service": "backend"
-      }
+      "destination": "https://deck-agent-s6d7.onrender.com/api/$1"
     },
     {
       "source": "/(.*)",
@@ -25,4 +23,3 @@
     }
   ]
 }
-
