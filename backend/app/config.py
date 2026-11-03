@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     preview_mode: Literal["libreoffice", "outline"] = "libreoffice"
     max_repo_tokens: int = 20000
     max_slides: int = 10
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-flash-lite-latest"
     anthropic_model: str = "claude-3-7-sonnet-20250219"
     design_engine: bool = True
 
