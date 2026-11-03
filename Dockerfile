@@ -13,12 +13,12 @@ WORKDIR /app
 # Install system dependencies:
 # - git: repository cloning and analysis
 # - graphviz: architecture diagram rendering (dot)
-# - libreoffice-impress-nogpu: slide rendering to PNG images
+# - libreoffice-impress-nogui: headless presentation engine to render slide PNG images
 # - fonts: clean typography in generated slides
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     graphviz \
-    libreoffice-impress-nogpu \
+    libreoffice-impress-nogui \
     libreoffice-common \
     fonts-liberation \
     fonts-dejavu-core \
@@ -46,4 +46,3 @@ EXPOSE 8000
 
 # Start Uvicorn bound to the environment-provided PORT
 CMD ["sh", "-c", "uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port ${PORT}"]
-
