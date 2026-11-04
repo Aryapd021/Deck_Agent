@@ -46,6 +46,10 @@ export function useDeck(projectId: string | null | undefined) {
         return await getDeck(projectId);
       } catch (err) {
         if (err instanceof ApiError && err.code === "NOT_FOUND") {
+          const msg = (err.message || "").toLowerCase();
+          if (msg.includes("project") && msg.includes("not found")) {
+            setStoredProjectId(null);
+          }
           return null;
         }
         throw err;

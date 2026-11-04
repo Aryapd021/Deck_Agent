@@ -107,29 +107,45 @@ export function InputsPane({
     try {
       let currentProjectId = projectId;
 
+      const segments = cleanRef.split(/[\\/]/).filter(Boolean);
+      const name = segments[segments.length - 1] || "deck-project";
+      const isUrl = /^(https?:\/\/|git@)/i.test(cleanRef);
+      const createPayload: CreateProjectRequest = {
+        name,
+        template_id: effectiveTemplateId,
+        ...(isUrl ? { repo_url: cleanRef } : { repo_path: cleanRef || "." }),
+      };
+
       // Create new project if no active project, or if user entered a repo path
       if (!currentProjectId || cleanRef) {
-        const segments = cleanRef.split(/[\\/]/).filter(Boolean);
-        const name = segments[segments.length - 1] || "deck-project";
-
-        const isUrl = /^(https?:\/\/|git@)/i.test(cleanRef);
-        const createPayload: CreateProjectRequest = {
-          name,
-          template_id: effectiveTemplateId,
-          ...(isUrl ? { repo_url: cleanRef } : { repo_path: cleanRef || "." }),
-        };
-
         const project = await createProject(createPayload);
         currentProjectId = project.id;
         setStoredProjectId(currentProjectId);
         onProjectChange(currentProjectId);
       }
 
-      await putInputs(currentProjectId, {
-        pitch_notes: pitchNotes,
-        chat_text: chatText,
-        criteria: "",
-      });
+      try {
+        await putInputs(currentProjectId, {
+          pitch_notes: pitchNotes,
+          chat_text: chatText,
+          criteria: "",
+        });
+      } catch (putErr) {
+        if (putErr instanceof ApiError && putErr.code === "NOT_FOUND") {
+          // Stale project on server, recreate fresh
+          const project = await createProject(createPayload);
+          currentProjectId = project.id;
+          setStoredProjectId(currentProjectId);
+          onProjectChange(currentProjectId);
+          await putInputs(currentProjectId, {
+            pitch_notes: pitchNotes,
+            chat_text: chatText,
+            criteria: "",
+          });
+        } else {
+          throw putErr;
+        }
+      }
 
       const accepted = await startGenerate(currentProjectId, {
         template_id: effectiveTemplateId,

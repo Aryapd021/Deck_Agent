@@ -32,6 +32,15 @@ export default function App() {
     }
   }, [projectId]);
 
+  useEffect(() => {
+    if (jobError && jobId) {
+      const timer = setTimeout(() => {
+        setJobId(null);
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [jobError, jobId]);
+
   function handleProjectChange(newId: string | null) {
     setStoredProjectId(newId);
     setProjectId(newId);
